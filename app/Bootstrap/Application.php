@@ -71,11 +71,14 @@ final class Application
             };
         };
 
-        $middlewareResolver = static function (string $middlewareClass) use ($jwtService): object {
+        $middlewareResolver = static function (string $middlewareClass) use (
+            $jwtService,
+            $userRepository
+        ): object {
             return match ($middlewareClass) {
                 AuthMiddleware::class => new AuthMiddleware(),
                 RoleMiddleware::class => new RoleMiddleware(),
-                JwtAuthMiddleware::class => new JwtAuthMiddleware($jwtService),
+                JwtAuthMiddleware::class => new JwtAuthMiddleware($jwtService, $userRepository),
                 JwtRoleMiddleware::class => new JwtRoleMiddleware(),
                 default => throw new RuntimeException(
                     "Middleware resolver is not configured for {$middlewareClass}."

@@ -8,6 +8,8 @@ use InvalidArgumentException;
 
 final class JwtService
 {
+    private const AUDIENCE = 'vending-machine-api';
+
     public function __construct(
         private string $secret,
         private string $issuer = 'vending-machine'
@@ -28,6 +30,7 @@ final class JwtService
         $header = ['typ' => 'JWT', 'alg' => 'HS256'];
         $payload = [
             'iss' => $this->issuer,
+            'aud' => self::AUDIENCE,
             'sub' => (string) $userId,
             'role' => $role,
             'iat' => $issuedAt,
@@ -90,11 +93,13 @@ final class JwtService
         $now = time();
         if (
             ($claims['iss'] ?? null) !== $this->issuer
+            || ($claims['aud'] ?? null) !== self::AUDIENCE
             || $userId === false
             || $userId <= 0
             || !in_array($claims['role'] ?? null, ['admin', 'user'], true)
             || !is_int($claims['iat'] ?? null)
             || !is_int($claims['exp'] ?? null)
+            || $claims['iat'] < 0
             || $claims['iat'] > $now + 60
             || $claims['exp'] <= $now
             || $claims['exp'] <= $claims['iat']

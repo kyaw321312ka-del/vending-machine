@@ -21,7 +21,7 @@ final class JwtServiceTest extends TestCase
         self::assertSame(['id' => 42, 'role' => 'admin'], $service->validateToken($token));
     }
 
-    public function testInvalidSignatureIssuerAndExpiredClaimsAreRejected(): void
+    public function testInvalidSignatureIssuerAudienceAndExpiredClaimsAreRejected(): void
     {
         $service = new JwtService(self::SECRET);
         $token = $service->createToken(42, 'user');
@@ -31,6 +31,7 @@ final class JwtServiceTest extends TestCase
         self::assertNull($service->validateToken(implode('.', $segments)));
         self::assertNull($service->validateToken($this->signedToken([
             'iss' => 'other-issuer',
+            'aud' => 'vending-machine-api',
             'sub' => '42',
             'role' => 'user',
             'iat' => time(),
@@ -38,10 +39,27 @@ final class JwtServiceTest extends TestCase
         ])));
         self::assertNull($service->validateToken($this->signedToken([
             'iss' => 'vending-machine',
+            'aud' => 'another-api',
+            'sub' => '42',
+            'role' => 'user',
+            'iat' => time(),
+            'exp' => time() + 60,
+        ])));
+        self::assertNull($service->validateToken($this->signedToken([
+            'iss' => 'vending-machine',
+            'aud' => 'vending-machine-api',
             'sub' => '42',
             'role' => 'user',
             'iat' => time() - 120,
             'exp' => time() - 1,
+        ])));
+        self::assertNull($service->validateToken($this->signedToken([
+            'iss' => 'vending-machine',
+            'aud' => 'vending-machine-api',
+            'sub' => '42',
+            'role' => 'user',
+            'iat' => -1,
+            'exp' => time() + 60,
         ])));
     }
 

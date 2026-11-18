@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Middleware;
 
+use App\Repositories\UserRepository;
 use App\Services\JwtService;
 use App\Services\JwtConfigurationException;
 
 final class JwtAuthMiddleware
 {
     public function __construct(
-        private JwtService $jwtService
+        private JwtService $jwtService,
+        private UserRepository $users
     ) {
     }
 
@@ -49,7 +51,21 @@ final class JwtAuthMiddleware
             return false;
         }
 
-        $_SERVER['AUTH_USER'] = $user;
+        $currentUser = $this->users->findById($user['id']);
+        if (
+            $currentUser === null
+            || !isset($currentUser['role'])
+            || !in_array($currentUser['role'], ['admin', 'user'], true)
+        ) {
+            $this->respondUnauthorized();
+
+            return false;
+        }
+
+        $_SERVER['AUTH_USER'] = [
+            'id' => $user['id'],
+            'role' => $currentUser['role'],
+        ];
 
         return true;
     }

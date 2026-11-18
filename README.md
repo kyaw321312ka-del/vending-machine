@@ -15,6 +15,7 @@ Obtain a Bearer token with `POST /api/auth/login` using an `application/json` bo
 ```
 
 Send the returned `access_token` in the `Authorization: Bearer <token>` header for protected routes. API JSON write requests must use the `application/json` content type.
+Tokens are audience-bound to `vending-machine-api`; protected requests also check the account's current database role, so deleted accounts are rejected and role changes take effect immediately. Log in again after deploying this token format change.
 
 | Method | Endpoint | Access |
 | --- | --- | --- |

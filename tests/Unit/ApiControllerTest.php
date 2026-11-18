@@ -103,7 +103,7 @@ final class ApiControllerTest extends TestCase
                 };
             },
             fn (string $class): object => match ($class) {
-                JwtAuthMiddleware::class => new JwtAuthMiddleware($this->jwt),
+                JwtAuthMiddleware::class => new JwtAuthMiddleware($this->jwt, $this->users),
                 JwtRoleMiddleware::class => new JwtRoleMiddleware(),
                 default => throw new \RuntimeException("Unknown middleware: {$class}"),
             }
@@ -155,6 +155,7 @@ final class ApiControllerTest extends TestCase
 
         $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$this->signedToken([
             'iss' => 'vending-machine',
+            'aud' => 'vending-machine-api',
             'sub' => (string) $this->userId,
             'role' => 'user',
             'iat' => time() - 120,
@@ -167,6 +168,31 @@ final class ApiControllerTest extends TestCase
         [$response, $validStatus] = $this->dispatch('GET', '/api/transactions');
         self::assertSame(200, $validStatus);
         self::assertTrue($response['success']);
+    }
+
+    public function testJwtAuthorizationUsesCurrentRoleAndRejectsDeletedAccounts(): void
+    {
+        $adminToken = $this->jwt->createToken($this->adminId, 'admin');
+        self::assertTrue($this->users->updateRole($this->adminId, 'user'));
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$adminToken;
+        $this->body = json_encode([
+            'name' => 'Blocked',
+            'price' => '1.000',
+            'quantity_available' => 1,
+        ], JSON_THROW_ON_ERROR);
+
+        [, $roleStatus] = $this->dispatch('POST', '/api/products');
+        self::assertSame(403, $roleStatus);
+
+        $userToken = $this->jwt->createToken($this->userId, 'user');
+        self::assertSame(
+            1,
+            $this->pdo->exec('DELETE FROM users WHERE id = '.$this->userId)
+        );
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$userToken;
+
+        [, $deletedAccountStatus] = $this->dispatch('GET', '/api/transactions');
+        self::assertSame(401, $deletedAccountStatus);
     }
 
     public function testOnlyUsersCanPurchaseAndAdminsCanViewAllTransactions(): void
