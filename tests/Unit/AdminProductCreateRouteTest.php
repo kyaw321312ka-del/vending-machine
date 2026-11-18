@@ -19,6 +19,7 @@ final class AdminProductCreateRouteTest extends TestCase
 {
     private Router $router;
     private ProductRepository $products;
+    private PDO $pdo;
 
     protected function setUp(): void
     {
@@ -35,9 +36,16 @@ final class AdminProductCreateRouteTest extends TestCase
         $_POST = [];
         unset($_SERVER['HTTP_X_CSRF_TOKEN']);
 
-        $pdo = new PDO('sqlite::memory:');
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $pdo->exec(
+        $this->pdo = new PDO('sqlite::memory:');
+        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->pdo->exec('PRAGMA foreign_keys = ON');
+        $this->pdo->exec(
+            'CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL
+            )'
+        );
+        $this->pdo->exec(
             'CREATE TABLE products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -47,11 +55,18 @@ final class AdminProductCreateRouteTest extends TestCase
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )'
         );
-        $this->products = new ProductRepository($pdo);
+        $this->pdo->exec(
+            'CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+                product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT
+            )'
+        );
+        $this->products = new ProductRepository($this->pdo);
         $controller = new ProductsController(
             $this->products,
             new ProductValidator(),
-            new PurchaseService($pdo, $this->products, new TransactionRepository($pdo))
+            new PurchaseService($this->pdo, $this->products, new TransactionRepository($this->pdo))
         );
 
         $this->router = new Router(
@@ -164,6 +179,190 @@ final class AdminProductCreateRouteTest extends TestCase
         }
     }
 
+    public function testAdminUpdatesProductUsingRouteIdAndRedirects(): void
+    {
+        $id = $this->products->create('Coke', '3.990', 50);
+        $token = str_repeat('1', 64);
+        $_SESSION['_csrf_token'] = $token;
+        $_SESSION['user'] = [
+            'id' => 1,
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            '_csrf_token' => $token,
+            'id' => '999',
+            'name' => 'Coke Zero',
+            'price' => '4.125',
+            'quantity_available' => '40',
+        ];
+
+        $this->dispatchWithOutput('POST', '/admin/products/'.$id.'/update');
+
+        self::assertSame(303, http_response_code());
+        self::assertSame('Product updated successfully.', $_SESSION['_flash_success']);
+        $product = $this->products->findById($id);
+        self::assertSame('Coke Zero', $product['name']);
+        self::assertSame('4.125', $product['price']);
+        self::assertSame(40, (int) $product['quantity_available']);
+        self::assertNull($this->products->findById(999));
+    }
+
+    public function testInvalidUpdatePreservesSubmittedValuesAndDoesNotChangeProduct(): void
+    {
+        $id = $this->products->create('Coke', '3.990', 50);
+        $token = str_repeat('2', 64);
+        $_SESSION['_csrf_token'] = $token;
+        $_SESSION['user'] = [
+            'id' => 1,
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            '_csrf_token' => $token,
+            'name' => '<b>New Coke</b>',
+            'price' => '0',
+            'quantity_available' => '-1',
+        ];
+
+        $html = $this->dispatchWithOutput('POST', '/admin/products/'.$id.'/update');
+
+        self::assertSame(422, http_response_code());
+        self::assertStringContainsString('value="&lt;b&gt;New Coke&lt;/b&gt;"', $html);
+        self::assertStringContainsString('value="0"', $html);
+        self::assertStringContainsString('value="-1"', $html);
+        self::assertStringContainsString('Price must be positive', $html);
+        self::assertStringContainsString('Quantity cannot be negative.', $html);
+        self::assertSame('Coke', $this->products->findById($id)['name']);
+    }
+
+    public function testUpdateRejectsInvalidCsrfAndMissingProducts(): void
+    {
+        $id = $this->products->create('Coke', '3.990', 50);
+        $_SESSION['_csrf_token'] = str_repeat('3', 64);
+        $_SESSION['user'] = [
+            'id' => 1,
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            '_csrf_token' => str_repeat('4', 64),
+            'name' => 'Pepsi',
+            'price' => '6.885',
+            'quantity_available' => '50',
+        ];
+
+        self::assertSame(
+            'Invalid CSRF token.',
+            $this->dispatchWithOutput('POST', '/admin/products/'.$id.'/update')
+        );
+        self::assertSame(403, http_response_code());
+
+        $_POST['_csrf_token'] = $_SESSION['_csrf_token'];
+        self::assertSame(
+            'Product not found.',
+            $this->dispatchWithOutput('POST', '/admin/products/999/update')
+        );
+        self::assertSame(404, http_response_code());
+        self::assertSame('Coke', $this->products->findById($id)['name']);
+    }
+
+    public function testGuestAndRegularUserCannotUpdateProducts(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        [$guest, $guestStatus] = $this->dispatchWithJsonResponse('POST', '/admin/products/1/update');
+        self::assertSame(401, $guestStatus);
+        self::assertSame('Authentication required.', $guest['message']);
+
+        $_SESSION['user'] = [
+            'id' => 2,
+            'name' => 'User',
+            'email' => 'user@example.com',
+            'role' => 'user',
+        ];
+        [$user, $userStatus] = $this->dispatchWithJsonResponse('POST', '/admin/products/1/update');
+        self::assertSame(403, $userStatus);
+        self::assertSame('You do not have permission to access this resource.', $user['message']);
+    }
+
+    public function testAdminDeletesProductAndSetsSuccessFlash(): void
+    {
+        $id = $this->products->create('Temporary product', '1.000', 5);
+        $this->prepareAdminPost(str_repeat('5', 64));
+
+        $this->dispatchWithOutput('POST', '/admin/products/'.$id.'/delete');
+
+        self::assertSame(303, http_response_code());
+        self::assertSame('Product deleted successfully.', $_SESSION['_flash_success']);
+        self::assertNull($this->products->findById($id));
+    }
+
+    public function testProductWithTransactionHistoryIsKeptAndGetsFriendlyError(): void
+    {
+        $id = $this->products->create('Purchased product', '2.000', 5);
+        $this->pdo->exec("INSERT INTO users (name) VALUES ('Test User')");
+        $userId = (int) $this->pdo->lastInsertId();
+        $insertTransaction = $this->pdo->prepare(
+            'INSERT INTO transactions (user_id, product_id) VALUES (:user_id, :product_id)'
+        );
+        $insertTransaction->execute(['user_id' => $userId, 'product_id' => $id]);
+        $this->prepareAdminPost(str_repeat('6', 64));
+
+        $this->dispatchWithOutput('POST', '/admin/products/'.$id.'/delete');
+
+        self::assertSame(303, http_response_code());
+        self::assertSame(
+            'This product cannot be deleted because it has transaction history.',
+            $_SESSION['_flash_error']
+        );
+        self::assertNotNull($this->products->findById($id));
+        self::assertSame(1, (int) $this->pdo->query('SELECT COUNT(*) FROM transactions')->fetchColumn());
+    }
+
+    public function testDeleteRejectsInvalidCsrfAndMissingProducts(): void
+    {
+        $id = $this->products->create('Temporary product', '1.000', 5);
+        $this->prepareAdminPost(str_repeat('7', 64));
+        $_POST['_csrf_token'] = str_repeat('8', 64);
+
+        self::assertSame(
+            'Invalid CSRF token.',
+            $this->dispatchWithOutput('POST', '/admin/products/'.$id.'/delete')
+        );
+        self::assertSame(403, http_response_code());
+        self::assertNotNull($this->products->findById($id));
+
+        $_POST['_csrf_token'] = $_SESSION['_csrf_token'];
+        self::assertSame(
+            'Product not found.',
+            $this->dispatchWithOutput('POST', '/admin/products/999/delete')
+        );
+        self::assertSame(404, http_response_code());
+    }
+
+    public function testGuestAndRegularUserCannotDeleteProducts(): void
+    {
+        [$guest, $guestStatus] = $this->dispatchWithJsonResponse('POST', '/admin/products/1/delete');
+        self::assertSame(401, $guestStatus);
+        self::assertSame('Authentication required.', $guest['message']);
+
+        $_SESSION['user'] = [
+            'id' => 2,
+            'name' => 'User',
+            'email' => 'user@example.com',
+            'role' => 'user',
+        ];
+        [$user, $userStatus] = $this->dispatchWithJsonResponse('POST', '/admin/products/1/delete');
+        self::assertSame(403, $userStatus);
+        self::assertSame('You do not have permission to access this resource.', $user['message']);
+    }
+
     public function testAdminCreatesProductAndSetsSuccessFlashForRedirect(): void
     {
         $token = str_repeat('b', 64);
@@ -271,11 +470,25 @@ final class AdminProductCreateRouteTest extends TestCase
         return [json_decode($body, true, 512, JSON_THROW_ON_ERROR), http_response_code()];
     }
 
-    private function dispatchWithOutput(): string
+    private function dispatchWithOutput(string $method = 'POST', string $uri = '/admin/products'): string
     {
         ob_start();
-        $this->router->dispatch('POST', '/admin/products');
+        $this->router->dispatch($method, $uri);
 
         return ob_get_clean();
     }
+
+    private function prepareAdminPost(string $token): void
+    {
+        $_SESSION['_csrf_token'] = $token;
+        $_SESSION['user'] = [
+            'id' => 1,
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = ['_csrf_token' => $token];
+    }
+
 }

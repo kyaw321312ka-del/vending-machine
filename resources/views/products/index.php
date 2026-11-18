@@ -16,6 +16,12 @@
             </p>
         <?php endif; ?>
 
+        <?php if (is_string($errorMessage ?? null)): ?>
+            <p class="mb-4 rounded bg-red-100 p-4 text-red-800" role="alert">
+                <?= htmlspecialchars($errorMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+            </p>
+        <?php endif; ?>
+
         <?php if ($products === []): ?>
             <p class="rounded bg-white p-6 shadow">No products are available.</p>
         <?php else: ?>

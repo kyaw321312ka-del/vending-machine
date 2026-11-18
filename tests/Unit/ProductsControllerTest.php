@@ -82,9 +82,32 @@ final class ProductsControllerTest extends TestCase
         self::assertSame('Invalid product listing parameters.', $body);
     }
 
+    public function testIndexDisplaysAndConsumesFriendlyErrorFlash(): void
+    {
+        session_id('products-flash-'.bin2hex(random_bytes(8)));
+        self::assertTrue(session_start());
+        $_SESSION['_flash_error'] = 'This product cannot be deleted because it has transaction history.';
+
+        ob_start();
+        $this->controller->index();
+        $html = ob_get_clean();
+
+        self::assertStringContainsString(
+            'This product cannot be deleted because it has transaction history.',
+            $html
+        );
+        self::assertArrayNotHasKey('_flash_error', $_SESSION);
+        $_SESSION = [];
+        session_destroy();
+    }
+
     protected function tearDown(): void
     {
         $_GET = [];
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION = [];
+            session_destroy();
+        }
     }
 
 }

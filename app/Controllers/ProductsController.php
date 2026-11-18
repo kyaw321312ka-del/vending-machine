@@ -11,7 +11,9 @@ use App\Routing\Route;
 use App\Services\PurchaseService;
 use App\Validation\ProductValidator;
 use InvalidArgumentException;
+use PDOException;
 use RuntimeException;
+use Throwable;
 
 final class ProductsController
 {
@@ -63,14 +65,7 @@ final class ProductsController
 
         $errors = [];
         $old = [];
-        $csrfToken = $this->csrfToken();
-        $basePath = $this->basePath();
-        $assetUrl = $basePath === ''
-            ? '/assets/css/output.css'
-            : $basePath . '/assets/css/output.css';
-
-        header('Content-Type: text/html; charset=utf-8');
-        require dirname(__DIR__, 2) . '/resources/views/admin/products/edit.php';
+        $this->renderEditForm($product, $errors, $old, 200);
     }
 
     #[Route(
@@ -136,6 +131,147 @@ final class ProductsController
         }
     }
 
+    #[Route(
+        'POST',
+        '/admin/products/{id}/update',
+        [[AuthMiddleware::class], [RoleMiddleware::class, 'admin']]
+    )]
+    public function update(string $id): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            header('Allow: POST');
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Method not allowed.';
+
+            return;
+        }
+
+        if (!$this->hasValidCsrfToken()) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Invalid CSRF token.';
+
+            return;
+        }
+
+        $productId = filter_var($id, FILTER_VALIDATE_INT);
+        if ($productId === false || $productId <= 0) {
+            $this->notFound();
+
+            return;
+        }
+
+        $product = $this->products->findById($productId);
+        if ($product === null) {
+            $this->notFound();
+
+            return;
+        }
+
+        $old = [];
+        foreach (['name', 'price', 'quantity_available'] as $field) {
+            if (isset($_POST[$field]) && is_string($_POST[$field])) {
+                $old[$field] = $_POST[$field];
+            }
+        }
+
+        $errors = $this->validator->validate($old);
+        if ($errors !== []) {
+            $this->renderEditForm($product, $errors, $old, 422);
+
+            return;
+        }
+
+        try {
+            $quantity = filter_var($old['quantity_available'], FILTER_VALIDATE_INT);
+            if ($quantity === false) {
+                throw new RuntimeException('Validated product quantity could not be parsed.');
+            }
+
+            if (!$this->products->update(
+                $productId,
+                trim($old['name']),
+                trim($old['price']),
+                $quantity
+            )) {
+                $this->notFound();
+
+                return;
+            }
+
+            $_SESSION['_flash_success'] = 'Product updated successfully.';
+            http_response_code(303);
+            header('Location: '.$this->basePath().'/products', true, 303);
+        } catch (Throwable $exception) {
+            error_log($exception->getMessage());
+            $this->renderEditForm(
+                $product,
+                ['_general' => 'Unable to update product. Please try again.'],
+                $old,
+                500
+            );
+        }
+    }
+
+    #[Route(
+        'POST',
+        '/admin/products/{id}/delete',
+        [[AuthMiddleware::class], [RoleMiddleware::class, 'admin']]
+    )]
+    public function destroy(string $id): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            header('Allow: POST');
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Method not allowed.';
+
+            return;
+        }
+
+        if (!$this->hasValidCsrfToken()) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Invalid CSRF token.';
+
+            return;
+        }
+
+        $productId = filter_var($id, FILTER_VALIDATE_INT);
+        if ($productId === false || $productId <= 0) {
+            $this->notFound();
+
+            return;
+        }
+
+        if ($this->products->findById($productId) === null) {
+            $this->notFound();
+
+            return;
+        }
+
+        try {
+            if (!$this->products->delete($productId)) {
+                $this->notFound();
+
+                return;
+            }
+
+            $_SESSION['_flash_success'] = 'Product deleted successfully.';
+        } catch (PDOException $exception) {
+            if ($this->isForeignKeyConstraintViolation($exception)) {
+                $_SESSION['_flash_error'] = 'This product cannot be deleted because it has transaction history.';
+            } else {
+                error_log($exception->getMessage());
+                $_SESSION['_flash_error'] = 'Unable to delete product. Please try again.';
+            }
+        }
+
+        http_response_code(303);
+        header('Location: '.$this->basePath().'/products', true, 303);
+    }
+
     #[Route('GET', '/products')]
     public function index(): void
     {
@@ -174,11 +310,18 @@ final class ProductsController
             ? '/assets/css/output.css'
             : $basePath . '/assets/css/output.css';
         $successMessage = null;
+        $errorMessage = null;
         if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['_flash_success'])) {
             $successMessage = is_string($_SESSION['_flash_success'])
                 ? $_SESSION['_flash_success']
                 : null;
             unset($_SESSION['_flash_success']);
+        }
+        if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['_flash_error'])) {
+            $errorMessage = is_string($_SESSION['_flash_error'])
+                ? $_SESSION['_flash_error']
+                : null;
+            unset($_SESSION['_flash_error']);
         }
 
         header('Content-Type: text/html; charset=utf-8');
@@ -201,6 +344,42 @@ final class ProductsController
         http_response_code($status);
         header('Content-Type: text/html; charset=utf-8');
         require dirname(__DIR__, 2) . '/resources/views/admin/products/create.php';
+    }
+
+    private function renderEditForm(array $product, array $errors, array $old, int $status): void
+    {
+        $csrfToken = $this->csrfToken();
+        $basePath = $this->basePath();
+        $assetUrl = $basePath === ''
+            ? '/assets/css/output.css'
+            : $basePath . '/assets/css/output.css';
+
+        http_response_code($status);
+        header('Content-Type: text/html; charset=utf-8');
+        require dirname(__DIR__, 2) . '/resources/views/admin/products/edit.php';
+    }
+
+    private function notFound(): void
+    {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Product not found.';
+    }
+
+    private function isForeignKeyConstraintViolation(PDOException $exception): bool
+    {
+        $errorInfo = $exception->errorInfo;
+        if (!is_array($errorInfo) || ($errorInfo[0] ?? null) !== '23000') {
+            return false;
+        }
+
+        $driverCode = (int) ($errorInfo[1] ?? 0);
+        if ($driverCode === 1451) {
+            return true;
+        }
+
+        return $driverCode === 19
+            && str_contains(strtolower((string) ($errorInfo[2] ?? '')), 'foreign key constraint');
     }
 
     private function hasValidCsrfToken(): bool
