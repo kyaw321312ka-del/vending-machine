@@ -15,7 +15,13 @@ final class JwtRoleMiddleware
         }
 
         $user = $_SERVER['AUTH_USER'] ?? null;
-        if (!is_array($user) || !isset($user['id'], $user['role'])) {
+        if (
+            !is_array($user)
+            || !isset($user['id'], $user['role'])
+            || !is_int($user['id'])
+            || $user['id'] <= 0
+            || !in_array($user['role'], ['admin', 'user'], true)
+        ) {
             $this->respond(401, 'Authentication required.');
 
             return false;
