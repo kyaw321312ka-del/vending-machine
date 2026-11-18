@@ -67,7 +67,7 @@ $escape = static fn (string $value): string => htmlspecialchars(
                 <?php if ($currentUser !== null): ?>
                     <a href="<?= $escape($basePath . '/transactions') ?>"
                        class="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-blue-50 hover:text-blue-700">
-                        Purchase History
+                        <?= ($currentUser['role'] ?? null) === 'admin' ? 'All Transactions' : 'Purchase History' ?>
                     </a>
 
                     <?php if (($currentUser['role'] ?? null) === 'admin'): ?>
@@ -115,7 +115,7 @@ $escape = static fn (string $value): string => htmlspecialchars(
                 <?php if ($currentUser !== null): ?>
                     <a href="<?= $escape($basePath . '/transactions') ?>"
                        class="rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700">
-                        Purchase History
+                        <?= ($currentUser['role'] ?? null) === 'admin' ? 'All Transactions' : 'Purchase History' ?>
                     </a>
 
                     <?php if (($currentUser['role'] ?? null) === 'admin'): ?>

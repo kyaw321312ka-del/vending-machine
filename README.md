@@ -24,8 +24,8 @@ Send the returned `access_token` in the `Authorization: Bearer <token>` header f
 | `POST` | `/api/products` | Admin |
 | `PUT` | `/api/products/{id}` | Admin |
 | `DELETE` | `/api/products/{id}` | Admin |
-| `POST` | `/api/products/{id}/purchase` | Authenticated |
-| `GET` | `/api/transactions` | Authenticated; returns only the current user's history |
+| `POST` | `/api/products/{id}/purchase` | User |
+| `GET` | `/api/transactions` | User sees their own history; admin sees all transactions |
 
 Product create and update bodies require `name`, `price`, and `quantity_available`; send `price` as a decimal string to preserve its exact value:
 
@@ -33,7 +33,7 @@ Product create and update bodies require `name`, `price`, and `quantity_availabl
 {"name":"Water","price":"1.250","quantity_available":8}
 ```
 
-Purchase bodies require a positive integer `quantity`. Product deletion returns `409 Conflict` when transaction history references the product.
+Purchase bodies require a positive integer `quantity`. Only normal user accounts can purchase products; admins manage products and inventory. Product deletion returns `409 Conflict` when transaction history references the product.
 
 ## Web authentication
 

@@ -23,6 +23,7 @@ final class PurchaseControllerFlowTest extends TestCase
     private Router $router;
     private int $userId;
     private int $otherUserId;
+    private int $adminId;
     private int $productId;
 
     protected function setUp(): void
@@ -78,6 +79,7 @@ final class PurchaseControllerFlowTest extends TestCase
 
         $this->userId = $this->createUser('Customer', 'customer@example.com');
         $this->otherUserId = $this->createUser('Other Customer', 'other@example.com');
+        $this->adminId = $this->createUser('Administrator', 'admin@example.com', 'admin');
         $this->products = new ProductRepository($this->pdo);
         $this->transactions = new TransactionRepository($this->pdo);
         $this->productId = $this->products->create('<Coke>', '6.885', 5);
@@ -117,7 +119,7 @@ final class PurchaseControllerFlowTest extends TestCase
         self::assertSame(200, http_response_code());
         self::assertStringContainsString('&lt;Coke&gt;', $html);
         self::assertStringNotContainsString('<Coke>', $html);
-        self::assertStringContainsString('Log in to purchase this product.', $html);
+        self::assertStringContainsString('Please sign in to your account before purchasing this product.', $html);
         self::assertStringNotContainsString('name="_csrf_token"', $html);
     }
 
@@ -131,7 +133,37 @@ final class PurchaseControllerFlowTest extends TestCase
 
         self::assertStringContainsString('name="_csrf_token" value="'.$token.'"', $html);
         self::assertStringContainsString('action="/vending-machine/public/products/'.$this->productId.'/purchase"', $html);
-        self::assertStringContainsString('View purchase history', $html);
+        self::assertStringContainsString('View Purchase History', $html);
+    }
+
+    public function testAdministratorProductDetailsDoNotOfferPurchaseForm(): void
+    {
+        $this->authenticate($this->adminId, 'admin');
+
+        $html = $this->dispatchWithOutput('GET', '/products/'.$this->productId);
+
+        self::assertSame(200, http_response_code());
+        self::assertStringContainsString('Administrator Account', $html);
+        self::assertStringContainsString('View All Transactions', $html);
+        self::assertStringNotContainsString('/products/'.$this->productId.'/purchase', $html);
+    }
+
+    public function testAdministratorCannotPurchaseProduct(): void
+    {
+        $this->authenticate($this->adminId, 'admin');
+        $_SESSION['_csrf_token'] = str_repeat('a', 64);
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            '_csrf_token' => $_SESSION['_csrf_token'],
+            'quantity' => '1',
+        ];
+
+        $body = $this->dispatchWithOutput('POST', '/products/'.$this->productId.'/purchase');
+
+        self::assertSame(403, http_response_code());
+        self::assertSame('Only customer accounts can purchase products.', $body);
+        self::assertSame(5, (int) $this->products->findById($this->productId)['quantity_available']);
+        self::assertSame(0, $this->transactions->countAll());
     }
 
     public function testPurchaseDeductsStockRecordsTransactionAndRedirects(): void
@@ -210,6 +242,22 @@ final class PurchaseControllerFlowTest extends TestCase
         self::assertStringContainsString('1 purchases', $html);
     }
 
+    public function testAdministratorCanViewAllTransactionRecords(): void
+    {
+        $this->transactions->create($this->userId, $this->productId, 1, '6.885', '6.885');
+        $this->transactions->create($this->otherUserId, $this->productId, 2, '6.885', '13.770');
+        $this->authenticate($this->adminId, 'admin');
+
+        $html = $this->dispatchWithOutput('GET', '/transactions');
+
+        self::assertSame(200, http_response_code());
+        self::assertStringContainsString('All Transactions', $html);
+        self::assertStringContainsString('Customer', $html);
+        self::assertStringContainsString('Other Customer', $html);
+        self::assertStringContainsString('2 transactions', $html);
+        self::assertStringContainsString('13.770', $html);
+    }
+
     public function testMissingProductDetailsReturn404(): void
     {
         $body = $this->dispatchWithOutput('GET', '/products/999');
@@ -218,13 +266,13 @@ final class PurchaseControllerFlowTest extends TestCase
         self::assertSame('Product not found.', $body);
     }
 
-    private function authenticate(int $userId): void
+    private function authenticate(int $userId, string $role = 'user'): void
     {
         $_SESSION['user'] = [
             'id' => $userId,
             'name' => 'Customer',
             'email' => 'customer@example.com',
-            'role' => 'user',
+            'role' => $role,
         ];
     }
 
@@ -255,15 +303,16 @@ final class PurchaseControllerFlowTest extends TestCase
         return [json_decode($body, true, 512, JSON_THROW_ON_ERROR), http_response_code()];
     }
 
-    private function createUser(string $name, string $email): int
+    private function createUser(string $name, string $email, string $role = 'user'): int
     {
         $statement = $this->pdo->prepare(
-            'INSERT INTO users (name, email, password) VALUES (:name, :email, :password)'
+            'INSERT INTO users (name, email, password, role) VALUES (:name, :email, :password, :role)'
         );
         $statement->execute([
             'name' => $name,
             'email' => $email,
             'password' => password_hash('temporary', PASSWORD_DEFAULT),
+            'role' => $role,
         ]);
 
         return (int) $this->pdo->lastInsertId();

@@ -379,6 +379,21 @@ final class ProductsController
             return;
         }
 
+        $currentUser = $_SESSION['user'] ?? null;
+        if (
+            !is_array($currentUser)
+            || !isset($currentUser['id'])
+            || !is_int($currentUser['id'])
+            || $currentUser['id'] <= 0
+            || ($currentUser['role'] ?? null) !== 'user'
+        ) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Only customer accounts can purchase products.';
+
+            return;
+        }
+
         if (!$this->hasValidCsrfToken()) {
             http_response_code(403);
             header('Content-Type: text/plain; charset=utf-8');
@@ -416,7 +431,7 @@ final class ProductsController
             return;
         }
 
-        $userId = $_SESSION['user']['id'];
+        $userId = $currentUser['id'];
         try {
             $purchase = $this->purchaseService->purchase($userId, $productId, $quantity);
             $_SESSION['_flash_success'] = sprintf(
@@ -450,15 +465,19 @@ final class ProductsController
         }
 
         $perPage = min($perPage, 100);
-        $userId = $_SESSION['user']['id'];
-        $totalTransactions = $this->transactions->countByUserId($userId);
+        $currentUser = $_SESSION['user'] ?? null;
+        $isAdmin = is_array($currentUser) && ($currentUser['role'] ?? null) === 'admin';
+        $userId = is_array($currentUser) && is_int($currentUser['id'] ?? null)
+            ? $currentUser['id']
+            : 0;
+        $totalTransactions = $isAdmin
+            ? $this->transactions->countAll()
+            : $this->transactions->countByUserId($userId);
         $totalPages = max(1, (int) ceil($totalTransactions / $perPage));
         $page = min($page, $totalPages);
-        $transactions = $this->transactions->getByUserId(
-            $userId,
-            $perPage,
-            ($page - 1) * $perPage
-        );
+        $transactions = $isAdmin
+            ? $this->transactions->getAll($perPage, ($page - 1) * $perPage)
+            : $this->transactions->getByUserId($userId, $perPage, ($page - 1) * $perPage);
         $basePath = $this->basePath();
         $csrfToken = $this->csrfToken();
         $successMessage = $this->takeFlash('_flash_success');

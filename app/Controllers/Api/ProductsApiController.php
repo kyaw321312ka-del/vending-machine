@@ -301,7 +301,7 @@ final class ProductsApiController
     #[Route(
         'POST',
         '/api/products/{id}/purchase',
-        [[JwtAuthMiddleware::class]]
+        [[JwtAuthMiddleware::class], [JwtRoleMiddleware::class, 'user']]
     )]
     public function purchase(string $id): void
     {
@@ -408,6 +408,19 @@ final class ProductsApiController
         }
 
         try {
+            $transactionRows = ($user['role'] ?? null) === 'admin'
+                ? $this->transactions->getAll(
+                    $pagination['per_page'],
+                    $pagination['offset']
+                )
+                : $this->transactions->getByUserId(
+                    $user['id'],
+                    $pagination['per_page'],
+                    $pagination['offset']
+                );
+            $total = ($user['role'] ?? null) === 'admin'
+                ? $this->transactions->countAll()
+                : $this->transactions->countByUserId($user['id']);
             $transactions = array_map(
                 static fn (array $transaction): array => [
                     ...$transaction,
@@ -416,13 +429,8 @@ final class ProductsApiController
                     'product_id' => (int) $transaction['product_id'],
                     'quantity' => (int) $transaction['quantity'],
                 ],
-                $this->transactions->getByUserId(
-                    $user['id'],
-                    $pagination['per_page'],
-                    $pagination['offset']
-                )
+                $transactionRows
             );
-            $total = $this->transactions->countByUserId($user['id']);
         } catch (PDOException $exception) {
             $this->databaseError($exception);
 

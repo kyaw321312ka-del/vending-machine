@@ -169,9 +169,20 @@ final class ApiControllerTest extends TestCase
         self::assertTrue($response['success']);
     }
 
-    public function testPurchaseAndHistoryUseTheAuthenticatedUsersTransactions(): void
+    public function testOnlyUsersCanPurchaseAndAdminsCanViewAllTransactions(): void
     {
         $productId = $this->products->create('Cola', '2.500', 5);
+        $this->body = json_encode(['quantity' => 1], JSON_THROW_ON_ERROR);
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$this->jwt->createToken($this->adminId, 'admin');
+
+        [$adminPurchase, $adminPurchaseStatus] = $this->dispatch(
+            'POST',
+            '/api/products/'.$productId.'/purchase'
+        );
+        self::assertSame(403, $adminPurchaseStatus);
+        self::assertFalse($adminPurchase['success']);
+        self::assertSame(5, (int) $this->products->findById($productId)['quantity_available']);
+
         $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$this->jwt->createToken($this->userId, 'user');
         $this->body = json_encode(['quantity' => 2], JSON_THROW_ON_ERROR);
 
@@ -186,8 +197,11 @@ final class ApiControllerTest extends TestCase
         self::assertSame($this->userId, $history['data'][0]['user_id']);
 
         $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$this->jwt->createToken($this->adminId, 'admin');
-        [$otherHistory] = $this->dispatch('GET', '/api/transactions');
-        self::assertSame([], $otherHistory['data']);
+        [$adminHistory, $adminHistoryStatus] = $this->dispatch('GET', '/api/transactions');
+        self::assertSame(200, $adminHistoryStatus);
+        self::assertCount(1, $adminHistory['data']);
+        self::assertSame($this->userId, $adminHistory['data'][0]['user_id']);
+        self::assertSame(1, $adminHistory['pagination']['total']);
     }
 
     public function testLoginReturnsBearerTokenAndInvalidCredentialsAreRejected(): void
