@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace App\Bootstrap;
 
 use App\Controllers\AuthController;
+use App\Controllers\ProductsController;
 use App\Database\Database;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\RoleMiddleware;
+use App\Repositories\ProductRepository;
+use App\Repositories\TransactionRepository;
 use App\Repositories\UserRepository;
 use App\Routing\Router;
 use App\Services\AuthService;
+use App\Services\PurchaseService;
+use App\Validation\ProductValidator;
 use RuntimeException;
 
 final class Application
@@ -21,15 +26,30 @@ final class Application
     {
         $rootPath = dirname(__DIR__, 2);
         $pdo = Database::getConnection();
+        $productRepository = new ProductRepository($pdo);
+        $transactionRepository = new TransactionRepository($pdo);
         $userRepository = new UserRepository($pdo);
         $authService = new AuthService($userRepository);
+        $productValidator = new ProductValidator();
+        $purchaseService = new PurchaseService($pdo, $productRepository, $transactionRepository);
 
-        $controllerResolver = static function (string $controllerClass) use ($authService): object {
-            if ($controllerClass === AuthController::class) {
-                return new AuthController($authService);
-            }
-
-            throw new RuntimeException("Controller resolver is not configured for {$controllerClass}.");
+        $controllerResolver = static function (string $controllerClass) use (
+            $authService,
+            $productRepository,
+            $productValidator,
+            $purchaseService
+        ): object {
+            return match ($controllerClass) {
+                AuthController::class => new AuthController($authService),
+                ProductsController::class => new ProductsController(
+                    $productRepository,
+                    $productValidator,
+                    $purchaseService
+                ),
+                default => throw new RuntimeException(
+                    "Controller resolver is not configured for {$controllerClass}."
+                ),
+            };
         };
 
         $middlewareResolver = static function (string $middlewareClass): object {
