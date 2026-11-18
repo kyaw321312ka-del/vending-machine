@@ -41,7 +41,8 @@ final class ProductsControllerTest extends TestCase
         $this->controller = new ProductsController(
             $this->products,
             new ProductValidator(),
-            $purchaseService
+            $purchaseService,
+            new TransactionRepository($this->pdo)
         );
 
         $_GET = [];

@@ -1,0 +1,81 @@
+<?php
+
+$basePath = is_string($basePath ?? null) ? $basePath : '';
+$productsUrl = $basePath . '/products';
+$escape = static fn (string $value): string => htmlspecialchars(
+    $value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+$pageUrl = static fn (int $number): string => $basePath . '/transactions?' . http_build_query([
+    'page' => $number,
+    'per_page' => $perPage,
+]);
+?>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Purchase History - Vending Machine</title>
+    <link rel="stylesheet" href="<?= $escape($basePath . '/assets/css/output.css') ?>">
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+    <main class="mx-auto max-w-5xl px-6 py-10">
+        <a class="text-blue-700 underline" href="<?= $escape($productsUrl) ?>">All products</a>
+        <h1 class="my-6 text-3xl font-bold">Purchase History</h1>
+
+        <?php if (is_string($successMessage ?? null)): ?>
+            <p class="mb-4 rounded bg-green-100 p-4 text-green-800" role="status"><?= $escape($successMessage) ?></p>
+        <?php endif; ?>
+        <?php if (is_string($errorMessage ?? null)): ?>
+            <p class="mb-4 rounded bg-red-100 p-4 text-red-800" role="alert"><?= $escape($errorMessage) ?></p>
+        <?php endif; ?>
+
+        <?php if ($transactions === []): ?>
+            <p class="rounded bg-white p-6 shadow">You have no purchases yet.</p>
+        <?php else: ?>
+            <div class="overflow-x-auto rounded bg-white shadow">
+                <table class="w-full border-collapse text-left">
+                    <thead class="bg-slate-200">
+                        <tr>
+                            <th class="p-3">Date</th>
+                            <th class="p-3">Product</th>
+                            <th class="p-3">Quantity</th>
+                            <th class="p-3">Unit price</th>
+                            <th class="p-3">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($transactions as $transaction): ?>
+                            <tr class="border-t border-slate-200">
+                                <td class="p-3"><?= $escape((string) $transaction['created_at']) ?></td>
+                                <td class="p-3"><?= $escape((string) $transaction['product_name']) ?></td>
+                                <td class="p-3"><?= (int) $transaction['quantity'] ?></td>
+                                <td class="p-3"><?= $escape((string) $transaction['unit_price']) ?></td>
+                                <td class="p-3"><?= $escape((string) $transaction['total_price']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+
+        <nav class="mt-6 flex items-center justify-between" aria-label="Purchase history pages">
+            <?php if ($page > 1): ?>
+                <a class="rounded bg-white px-4 py-2 shadow" href="<?= $escape($pageUrl($page - 1)) ?>">Previous</a>
+            <?php else: ?>
+                <span></span>
+            <?php endif; ?>
+
+            <span>Page <?= (int) $page ?> of <?= (int) $totalPages ?> (<?= (int) $totalTransactions ?> purchases)</span>
+
+            <?php if ($page < $totalPages): ?>
+                <a class="rounded bg-white px-4 py-2 shadow" href="<?= $escape($pageUrl($page + 1)) ?>">Next</a>
+            <?php else: ?>
+                <span></span>
+            <?php endif; ?>
+        </nav>
+    </main>
+</body>
+</html>

@@ -37,14 +37,16 @@ final class Application
             $authService,
             $productRepository,
             $productValidator,
-            $purchaseService
+            $purchaseService,
+            $transactionRepository
         ): object {
             return match ($controllerClass) {
                 AuthController::class => new AuthController($authService),
                 ProductsController::class => new ProductsController(
                     $productRepository,
                     $productValidator,
-                    $purchaseService
+                    $purchaseService,
+                    $transactionRepository
                 ),
                 default => throw new RuntimeException(
                     "Controller resolver is not configured for {$controllerClass}."

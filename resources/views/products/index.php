@@ -38,7 +38,9 @@
                         <?php foreach ($products as $product): ?>
                             <tr class="border-t border-slate-200">
                                 <td class="p-3">
-                                    <?= htmlspecialchars((string) $product['name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+                                    <a class="text-blue-700 underline" href="<?= htmlspecialchars($basePath . '/products/' . (int) $product['id'], ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars((string) $product['name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+                                    </a>
                                 </td>
                                 <td class="p-3">
                                     <?= htmlspecialchars((string) $product['price'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>

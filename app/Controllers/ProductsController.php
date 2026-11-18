@@ -7,9 +7,11 @@ namespace App\Controllers;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\RoleMiddleware;
 use App\Repositories\ProductRepository;
+use App\Repositories\TransactionRepository;
 use App\Routing\Route;
 use App\Services\PurchaseService;
 use App\Validation\ProductValidator;
+use DomainException;
 use InvalidArgumentException;
 use PDOException;
 use RuntimeException;
@@ -20,7 +22,8 @@ final class ProductsController
     public function __construct(
         private ProductRepository $products,
         private ProductValidator $validator,
-        private PurchaseService $purchaseService
+        private PurchaseService $purchaseService,
+        private TransactionRepository $transactions
     ) {
     }
 
@@ -309,24 +312,171 @@ final class ProductsController
         $assetUrl = ($basePath === '')
             ? '/assets/css/output.css'
             : $basePath . '/assets/css/output.css';
-        $successMessage = null;
-        $errorMessage = null;
-        if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['_flash_success'])) {
-            $successMessage = is_string($_SESSION['_flash_success'])
-                ? $_SESSION['_flash_success']
-                : null;
-            unset($_SESSION['_flash_success']);
-        }
-        if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['_flash_error'])) {
-            $errorMessage = is_string($_SESSION['_flash_error'])
-                ? $_SESSION['_flash_error']
-                : null;
-            unset($_SESSION['_flash_error']);
-        }
+        $successMessage = $this->takeFlash('_flash_success');
+        $errorMessage = $this->takeFlash('_flash_error');
 
         header('Content-Type: text/html; charset=utf-8');
 
         require dirname(__DIR__, 2) . '/resources/views/products/index.php';
+    }
+
+    #[Route('GET', '/products/{id}')]
+    public function show(string $id): void
+    {
+        $productId = filter_var($id, FILTER_VALIDATE_INT);
+        if ($productId === false || $productId <= 0) {
+            $this->notFound();
+
+            return;
+        }
+
+        $product = $this->products->findById($productId);
+        if ($product === null) {
+            $this->notFound();
+
+            return;
+        }
+
+        $currentUser = session_status() === PHP_SESSION_ACTIVE
+            ? ($_SESSION['user'] ?? null)
+            : null;
+        if (
+            !is_array($currentUser)
+            || !isset($currentUser['id'])
+            || !is_int($currentUser['id'])
+            || $currentUser['id'] <= 0
+        ) {
+            $currentUser = null;
+        }
+
+        $csrfToken = $currentUser === null ? '' : $this->csrfToken();
+        $errors = [];
+        $old = [];
+        $successMessage = $this->takeFlash('_flash_success');
+        $errorMessage = $this->takeFlash('_flash_error');
+        $basePath = $this->basePath();
+        $assetUrl = $basePath === ''
+            ? '/assets/css/output.css'
+            : $basePath . '/assets/css/output.css';
+
+        header('Content-Type: text/html; charset=utf-8');
+        require dirname(__DIR__, 2) . '/resources/views/products/show.php';
+    }
+
+    #[Route('POST', '/products/{id}/purchase', [[AuthMiddleware::class]])]
+    public function purchase(string $id): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            header('Allow: POST');
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Method not allowed.';
+
+            return;
+        }
+
+        if (!$this->hasValidCsrfToken()) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Invalid CSRF token.';
+
+            return;
+        }
+
+        $productId = filter_var($id, FILTER_VALIDATE_INT);
+        if ($productId === false || $productId <= 0) {
+            $this->notFound();
+
+            return;
+        }
+
+        $product = $this->products->findById($productId);
+        if ($product === null) {
+            $this->notFound();
+
+            return;
+        }
+
+        $quantityInput = $_POST['quantity'] ?? null;
+        $quantity = is_string($quantityInput)
+            ? filter_var($quantityInput, FILTER_VALIDATE_INT)
+            : false;
+        if ($quantity === false || $quantity <= 0) {
+            $this->renderProductDetails(
+                $product,
+                ['quantity' => 'Quantity must be a positive whole number.'],
+                ['quantity' => is_string($quantityInput) ? $quantityInput : ''],
+                422
+            );
+
+            return;
+        }
+
+        $userId = $_SESSION['user']['id'];
+        try {
+            $purchase = $this->purchaseService->purchase($userId, $productId, $quantity);
+            $_SESSION['_flash_success'] = sprintf(
+                'Purchase successful: %d × %s for %s.',
+                $purchase['quantity'],
+                $purchase['product_name'],
+                $purchase['total_price']
+            );
+        } catch (DomainException $exception) {
+            $_SESSION['_flash_error'] = $exception->getMessage() === 'Insufficient product inventory.'
+                ? 'There is not enough stock to complete this purchase.'
+                : 'Unable to complete this purchase.';
+        } catch (Throwable $exception) {
+            error_log($exception->getMessage());
+            $_SESSION['_flash_error'] = 'Unable to complete this purchase. Please try again.';
+        }
+
+        http_response_code(303);
+        header('Location: '.$this->basePath().'/products/'.$productId, true, 303);
+    }
+
+    #[Route('GET', '/transactions', [[AuthMiddleware::class]])]
+    public function history(): void
+    {
+        $page = $this->queryInteger('page', 1);
+        $perPage = $this->queryInteger('per_page', 10);
+        if ($page === null || $perPage === null) {
+            $this->badRequest();
+
+            return;
+        }
+
+        $perPage = min($perPage, 100);
+        $userId = $_SESSION['user']['id'];
+        $totalTransactions = $this->transactions->countByUserId($userId);
+        $totalPages = max(1, (int) ceil($totalTransactions / $perPage));
+        $page = min($page, $totalPages);
+        $transactions = $this->transactions->getByUserId(
+            $userId,
+            $perPage,
+            ($page - 1) * $perPage
+        );
+        $basePath = $this->basePath();
+        $successMessage = $this->takeFlash('_flash_success');
+        $errorMessage = $this->takeFlash('_flash_error');
+
+        header('Content-Type: text/html; charset=utf-8');
+        require dirname(__DIR__, 2) . '/resources/views/products/history.php';
+    }
+
+    private function renderProductDetails(array $product, array $errors, array $old, int $status): void
+    {
+        $currentUser = $_SESSION['user'] ?? null;
+        $csrfToken = $this->csrfToken();
+        $successMessage = $this->takeFlash('_flash_success');
+        $errorMessage = $this->takeFlash('_flash_error');
+        $basePath = $this->basePath();
+        $assetUrl = $basePath === ''
+            ? '/assets/css/output.css'
+            : $basePath . '/assets/css/output.css';
+
+        http_response_code($status);
+        header('Content-Type: text/html; charset=utf-8');
+        require dirname(__DIR__, 2) . '/resources/views/products/show.php';
     }
 
     private function renderCreateForm(array $errors, array $old, int $status): void
@@ -409,6 +559,18 @@ final class ProductsController
         }
 
         return $_SESSION['_csrf_token'];
+    }
+
+    private function takeFlash(string $key): ?string
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE || !array_key_exists($key, $_SESSION)) {
+            return null;
+        }
+
+        $message = is_string($_SESSION[$key]) ? $_SESSION[$key] : null;
+        unset($_SESSION[$key]);
+
+        return $message;
     }
 
     private function basePath(): string

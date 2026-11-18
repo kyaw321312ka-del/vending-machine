@@ -66,7 +66,8 @@ final class AdminProductCreateRouteTest extends TestCase
         $controller = new ProductsController(
             $this->products,
             new ProductValidator(),
-            new PurchaseService($this->pdo, $this->products, new TransactionRepository($this->pdo))
+            new PurchaseService($this->pdo, $this->products, new TransactionRepository($this->pdo)),
+            new TransactionRepository($this->pdo)
         );
 
         $this->router = new Router(
