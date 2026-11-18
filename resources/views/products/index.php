@@ -1,12 +1,12 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Products - Vending Machine</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars($assetUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
-</head>
-<body class="min-h-screen bg-slate-100 text-slate-900">
+<?php
+
+$title = 'Products';
+$currentUser = session_status() === PHP_SESSION_ACTIVE ? ($_SESSION['user'] ?? null) : null;
+if (!is_array($currentUser)) {
+    $currentUser = null;
+}
+ob_start();
+?>
     <main class="mx-auto max-w-5xl px-6 py-10">
         <h1 class="mb-6 text-3xl font-bold">Products</h1>
 
@@ -79,5 +79,7 @@
             <?php endif; ?>
         </nav>
     </main>
-</body>
-</html>
+<?php
+
+$content = ob_get_clean();
+require dirname(__DIR__) . '/layouts/app.php';

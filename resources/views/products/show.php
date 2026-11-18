@@ -15,15 +15,11 @@ $escape = static fn (string $value): string => htmlspecialchars(
     'UTF-8'
 );
 ?>
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $escape((string) $product['name']) ?> - Vending Machine</title>
-    <link rel="stylesheet" href="<?= $escape($assetUrl) ?>">
-</head>
-<body class="min-h-screen bg-slate-100 text-slate-900">
+<?php
+
+$title = (string) $product['name'];
+ob_start();
+?>
     <main class="mx-auto max-w-2xl px-6 py-10">
         <a class="text-blue-700 underline" href="<?= $escape($productsUrl) ?>">All products</a>
         <h1 class="my-6 text-3xl font-bold"><?= $escape((string) $product['name']) ?></h1>
@@ -80,5 +76,7 @@ $escape = static fn (string $value): string => htmlspecialchars(
             <p class="mt-6 rounded bg-white p-4 shadow">Log in to purchase this product.</p>
         <?php endif; ?>
     </main>
-</body>
-</html>
+<?php
+
+$content = ob_get_clean();
+require dirname(__DIR__) . '/layouts/app.php';

@@ -8,6 +8,7 @@ use App\Controllers\AuthController;
 use App\Controllers\Api\AuthApiController;
 use App\Controllers\Api\ProductsApiController;
 use App\Controllers\ProductsController;
+use App\Controllers\WebAuthController;
 use App\Database\Database;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\JwtAuthMiddleware;
@@ -51,6 +52,7 @@ final class Application
             return match ($controllerClass) {
                 AuthController::class => new AuthController($authService),
                 AuthApiController::class => new AuthApiController($authService, $jwtService),
+                WebAuthController::class => new WebAuthController($authService),
                 ProductsController::class => new ProductsController(
                     $productRepository,
                     $productValidator,

@@ -34,3 +34,7 @@ Product create and update bodies require `name`, `price`, and `quantity_availabl
 ```
 
 Purchase bodies require a positive integer `quantity`. Product deletion returns `409 Conflict` when transaction history references the product.
+
+## Web authentication
+
+The HTML sign-in and registration forms are available at `/auth/login` and `/auth/register`. The existing `/login` and `/register` endpoints remain JSON endpoints.

@@ -13,15 +13,15 @@ $escape = static fn (string $value): string => htmlspecialchars(
     'UTF-8'
 );
 ?>
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Create Product - Vending Machine</title>
-    <link rel="stylesheet" href="<?= $escape($assetUrl) ?>">
-</head>
-<body class="min-h-screen bg-slate-100 text-slate-900">
+<?php
+
+$title = 'Create Product';
+$currentUser = session_status() === PHP_SESSION_ACTIVE ? ($_SESSION['user'] ?? null) : null;
+if (!is_array($currentUser)) {
+    $currentUser = null;
+}
+ob_start();
+?>
     <main class="mx-auto max-w-2xl px-6 py-10">
         <h1 class="mb-6 text-3xl font-bold">Create Product</h1>
 
@@ -94,5 +94,7 @@ $escape = static fn (string $value): string => htmlspecialchars(
             </div>
         </form>
     </main>
-</body>
-</html>
+<?php
+
+$content = ob_get_clean();
+require dirname(__DIR__, 2) . '/layouts/app.php';

@@ -12,15 +12,16 @@ $pageUrl = static fn (int $number): string => $basePath . '/transactions?' . htt
     'per_page' => $perPage,
 ]);
 ?>
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Purchase History - Vending Machine</title>
-    <link rel="stylesheet" href="<?= $escape($basePath . '/assets/css/output.css') ?>">
-</head>
-<body class="min-h-screen bg-slate-100 text-slate-900">
+<?php
+
+$title = 'Purchase History';
+$currentUser = session_status() === PHP_SESSION_ACTIVE ? ($_SESSION['user'] ?? null) : null;
+if (!is_array($currentUser)) {
+    $currentUser = null;
+}
+$assetUrl = $basePath . '/assets/css/output.css';
+ob_start();
+?>
     <main class="mx-auto max-w-5xl px-6 py-10">
         <a class="text-blue-700 underline" href="<?= $escape($productsUrl) ?>">All products</a>
         <h1 class="my-6 text-3xl font-bold">Purchase History</h1>
@@ -77,5 +78,7 @@ $pageUrl = static fn (int $number): string => $basePath . '/transactions?' . htt
             <?php endif; ?>
         </nav>
     </main>
-</body>
-</html>
+<?php
+
+$content = ob_get_clean();
+require dirname(__DIR__) . '/layouts/app.php';
