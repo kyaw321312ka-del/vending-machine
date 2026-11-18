@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Middleware\AuthMiddleware;
+use App\Routing\Route;
 use App\Services\AuthService;
 use InvalidArgumentException;
 use Throwable;
@@ -17,6 +19,7 @@ final class AuthController
     ) {
     }
 
+    #[Route('GET', '/csrf-token')]
     public function csrfToken(): void
     {
         if (!$this->requireMethod('GET')) {
@@ -53,6 +56,7 @@ final class AuthController
         }
     }
 
+    #[Route('POST', '/register')]
     public function register(): void
     {
         if (!$this->requireMethod('POST') || !$this->requireCsrfToken()) {
@@ -95,6 +99,7 @@ final class AuthController
         }
     }
 
+    #[Route('POST', '/login')]
     public function login(): void
     {
         if (!$this->requireMethod('POST') || !$this->requireCsrfToken()) {
@@ -142,6 +147,7 @@ final class AuthController
         }
     }
 
+    #[Route('POST', '/logout')]
     public function logout(): void
     {
         if (!$this->requireMethod('POST') || !$this->requireCsrfToken()) {
@@ -163,6 +169,7 @@ final class AuthController
         }
     }
 
+    #[Route('GET', '/me', middleware: [[AuthMiddleware::class]])]
     public function me(): void
     {
         if (!$this->requireMethod('GET')) {

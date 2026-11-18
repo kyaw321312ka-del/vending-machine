@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repositories;
 
 use App\Database\Database;
+use InvalidArgumentException;
 use LogicException;
 use PDO;
 
@@ -65,13 +66,40 @@ final class ProductRepository
         return $product === false ? null : $product;
     }
 
-    public function getAll(): array
-    {
-        $statement = $this->pdo->query(
+    public function getAll(
+        int $limit = 10,
+        int $offset = 0,
+        string $sortBy = 'id',
+        string $sortDirection = 'ASC'
+    ): array {
+        $sortColumns = [
+            'id' => 'id',
+            'name' => 'name',
+            'price' => 'price',
+            'quantity_available' => 'quantity_available',
+            'created_at' => 'created_at',
+            'updated_at' => 'updated_at',
+        ];
+        if (!isset($sortColumns[$sortBy])) {
+            throw new InvalidArgumentException('Unsupported product sort column.');
+        }
+
+        $sortDirection = strtoupper($sortDirection);
+        if (!in_array($sortDirection, ['ASC', 'DESC'], true)) {
+            throw new InvalidArgumentException('Sort direction must be ASC or DESC.');
+        }
+
+        $limit = max(1, min($limit, 100));
+        $offset = max(0, $offset);
+        $statement = $this->pdo->prepare(
             'SELECT id, name, price, quantity_available, created_at, updated_at
             FROM products
-            ORDER BY id ASC'
+            ORDER BY '.$sortColumns[$sortBy].' '.$sortDirection.'
+            LIMIT :limit OFFSET :offset'
         );
+        $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $statement->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $statement->execute();
 
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -90,7 +118,7 @@ final class ProductRepository
             'quantity_available' => $quantityAvailable,
         ]);
 
-        return $statement->rowCount() > 0;
+        return $statement->rowCount() > 0 || $this->findById($id) !== null;
     }
 
     public function updateQuantity(int $id, int $quantityAvailable): bool

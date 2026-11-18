@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Repositories\ProductRepository;
+use InvalidArgumentException;
 use LogicException;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -74,5 +75,37 @@ final class ProductRepositoryTest extends TestCase
         self::assertTrue($this->repository->updateQuantity($id, 48));
         self::assertSame(48, (int) $this->repository->findById($id)['quantity_available']);
         self::assertFalse($this->repository->updateQuantity(99, 10));
+    }
+
+    public function testGetAllSortsAndPaginatesProducts(): void
+    {
+        $this->repository->create('Water', '0.500', 100);
+        $this->repository->create('Coke', '3.990', 50);
+        $this->repository->create('Pepsi', '6.885', 50);
+
+        $page = $this->repository->getAll(2, 1, 'name', 'DESC');
+
+        self::assertSame(['Pepsi', 'Coke'], array_column($page, 'name'));
+        self::assertSame(['Coke'], array_column($this->repository->getAll(0, -1, 'name', 'ASC'), 'name'));
+    }
+
+    public function testGetAllRejectsUnapprovedSortValues(): void
+    {
+        try {
+            $this->repository->getAll(10, 0, 'name; DROP TABLE products');
+            self::fail('Expected an unsupported sort column to be rejected.');
+        } catch (InvalidArgumentException $exception) {
+            self::assertSame('Unsupported product sort column.', $exception->getMessage());
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->repository->getAll(10, 0, 'name', 'SIDEWAYS');
+    }
+
+    public function testUpdatingExistingProductWithUnchangedValuesReturnsTrue(): void
+    {
+        $id = $this->repository->create('Coke', '3.990', 50);
+
+        self::assertTrue($this->repository->update($id, 'Coke', '3.990', 50));
     }
 }
