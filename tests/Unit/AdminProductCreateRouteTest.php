@@ -18,6 +18,7 @@ use PHPUnit\Framework\TestCase;
 final class AdminProductCreateRouteTest extends TestCase
 {
     private Router $router;
+    private ProductRepository $products;
 
     protected function setUp(): void
     {
@@ -31,6 +32,8 @@ final class AdminProductCreateRouteTest extends TestCase
         $_SESSION = [];
         $_SERVER['SCRIPT_NAME'] = '/vending-machine/public/index.php';
         http_response_code(200);
+        $_POST = [];
+        unset($_SERVER['HTTP_X_CSRF_TOKEN']);
 
         $pdo = new PDO('sqlite::memory:');
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -44,11 +47,11 @@ final class AdminProductCreateRouteTest extends TestCase
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )'
         );
-        $products = new ProductRepository($pdo);
+        $this->products = new ProductRepository($pdo);
         $controller = new ProductsController(
-            $products,
+            $this->products,
             new ProductValidator(),
-            new PurchaseService($pdo, $products, new TransactionRepository($pdo))
+            new PurchaseService($pdo, $this->products, new TransactionRepository($pdo))
         );
 
         $this->router = new Router(
@@ -116,12 +119,163 @@ final class AdminProductCreateRouteTest extends TestCase
         self::assertSame('You do not have permission to access this resource.', $response['message']);
     }
 
-    private function dispatchWithJsonResponse(): array
+    public function testAdminCanOpenEditPageWithExistingValuesAndReusedCsrfToken(): void
+    {
+        $id = $this->products->create('<img src=x>', '6.885', 50);
+        $token = str_repeat('f', 64);
+        $_SESSION['_csrf_token'] = $token;
+        $_SESSION['user'] = [
+            'id' => 1,
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+
+        ob_start();
+        $this->router->dispatch('GET', '/admin/products/'.$id.'/edit');
+        $html = ob_get_clean();
+
+        self::assertSame(200, http_response_code());
+        self::assertSame($token, $_SESSION['_csrf_token']);
+        self::assertStringContainsString('name="_csrf_token" value="'.$token.'"', $html);
+        self::assertStringContainsString('value="&lt;img src=x&gt;"', $html);
+        self::assertStringContainsString('value="6.885"', $html);
+        self::assertStringContainsString('value="50"', $html);
+        self::assertStringContainsString('action="/vending-machine/public/admin/products/'.$id.'/update"', $html);
+    }
+
+    public function testInvalidOrMissingEditProductReturnsNotFound(): void
+    {
+        $_SESSION['user'] = [
+            'id' => 1,
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+
+        foreach (['not-an-id', '999'] as $id) {
+            http_response_code(200);
+            ob_start();
+            $this->router->dispatch('GET', '/admin/products/'.$id.'/edit');
+            $body = ob_get_clean();
+
+            self::assertSame(404, http_response_code());
+            self::assertSame('Product not found.', $body);
+        }
+    }
+
+    public function testAdminCreatesProductAndSetsSuccessFlashForRedirect(): void
+    {
+        $token = str_repeat('b', 64);
+        $_SESSION['_csrf_token'] = $token;
+        $_SESSION['user'] = [
+            'id' => 1,
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            '_csrf_token' => $token,
+            'name' => '  Pepsi  ',
+            'price' => '6.885',
+            'quantity_available' => '50',
+        ];
+
+        $this->dispatchWithOutput();
+
+        self::assertSame(303, http_response_code());
+        self::assertSame('Product created successfully.', $_SESSION['_flash_success']);
+        self::assertSame('Pepsi', $this->products->getAll()[0]['name']);
+        self::assertSame('6.885', $this->products->getAll()[0]['price']);
+        self::assertSame(50, (int) $this->products->getAll()[0]['quantity_available']);
+    }
+
+    public function testInvalidProductIsRedisplayedWithOldValuesAndErrors(): void
+    {
+        $token = str_repeat('c', 64);
+        $_SESSION['_csrf_token'] = $token;
+        $_SESSION['user'] = [
+            'id' => 1,
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            '_csrf_token' => $token,
+            'name' => '<script>alert(1)</script>',
+            'price' => '0',
+            'quantity_available' => '-1',
+        ];
+
+        $html = $this->dispatchWithOutput();
+
+        self::assertSame(422, http_response_code());
+        self::assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
+        self::assertStringNotContainsString('<script>alert(1)</script>', $html);
+        self::assertStringContainsString('Price must be positive', $html);
+        self::assertStringContainsString('Quantity cannot be negative.', $html);
+        self::assertSame(0, $this->products->countAll());
+    }
+
+    public function testInvalidCsrfTokenIsRejectedWithoutCreatingProduct(): void
+    {
+        $_SESSION['_csrf_token'] = str_repeat('d', 64);
+        $_SESSION['user'] = [
+            'id' => 1,
+            'name' => 'Admin',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_POST = [
+            '_csrf_token' => str_repeat('e', 64),
+            'name' => 'Coke',
+            'price' => '3.990',
+            'quantity_available' => '10',
+        ];
+
+        $body = $this->dispatchWithOutput();
+
+        self::assertSame(403, http_response_code());
+        self::assertSame('Invalid CSRF token.', $body);
+        self::assertSame(0, $this->products->countAll());
+    }
+
+    public function testGuestAndRegularUserCannotCreateProduct(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        [$guest, $guestStatus] = $this->dispatchWithJsonResponse('POST', '/admin/products');
+        self::assertSame(401, $guestStatus);
+        self::assertSame('Authentication required.', $guest['message']);
+
+        $_SESSION['user'] = [
+            'id' => 2,
+            'name' => 'User',
+            'email' => 'user@example.com',
+            'role' => 'user',
+        ];
+        [$user, $userStatus] = $this->dispatchWithJsonResponse('POST', '/admin/products');
+        self::assertSame(403, $userStatus);
+        self::assertSame('You do not have permission to access this resource.', $user['message']);
+        self::assertSame(0, $this->products->countAll());
+    }
+
+    private function dispatchWithJsonResponse(string $method = 'GET', string $uri = '/admin/products/create'): array
     {
         ob_start();
-        $this->router->dispatch('GET', '/admin/products/create');
+        $this->router->dispatch($method, $uri);
         $body = ob_get_clean();
 
         return [json_decode($body, true, 512, JSON_THROW_ON_ERROR), http_response_code()];
+    }
+
+    private function dispatchWithOutput(): string
+    {
+        ob_start();
+        $this->router->dispatch('POST', '/admin/products');
+
+        return ob_get_clean();
     }
 }

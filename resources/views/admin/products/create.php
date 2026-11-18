@@ -4,6 +4,9 @@ $errors = is_array($errors ?? null) ? $errors : [];
 $old = is_array($old ?? null) ? $old : [];
 $csrfToken = is_string($csrfToken ?? null) ? $csrfToken : '';
 $assetUrl = is_string($assetUrl ?? null) ? $assetUrl : '/assets/css/output.css';
+$basePath = is_string($basePath ?? null) ? $basePath : '';
+$formAction = $basePath . '/admin/products';
+$productsUrl = $basePath . '/products';
 $escape = static fn (string $value): string => htmlspecialchars(
     $value,
     ENT_QUOTES | ENT_SUBSTITUTE,
@@ -22,7 +25,11 @@ $escape = static fn (string $value): string => htmlspecialchars(
     <main class="mx-auto max-w-2xl px-6 py-10">
         <h1 class="mb-6 text-3xl font-bold">Create Product</h1>
 
-        <form action="/admin/products" method="post" class="space-y-5 rounded bg-white p-6 shadow">
+        <?php if (isset($errors['_general']) && is_string($errors['_general'])): ?>
+            <p class="mb-4 rounded bg-red-100 p-4 text-red-800" role="alert"><?= $escape($errors['_general']) ?></p>
+        <?php endif; ?>
+
+        <form action="<?= $escape($formAction) ?>" method="post" class="space-y-5 rounded bg-white p-6 shadow">
             <input type="hidden" name="_csrf_token" value="<?= $escape($csrfToken) ?>">
 
             <div>
@@ -83,7 +90,7 @@ $escape = static fn (string $value): string => htmlspecialchars(
 
             <div class="flex gap-3">
                 <button type="submit" class="rounded bg-blue-700 px-4 py-2 font-medium text-white">Create product</button>
-                <a href="/products" class="rounded border border-slate-300 px-4 py-2 font-medium">Cancel</a>
+                <a href="<?= $escape($productsUrl) ?>" class="rounded border border-slate-300 px-4 py-2 font-medium">Cancel</a>
             </div>
         </form>
     </main>

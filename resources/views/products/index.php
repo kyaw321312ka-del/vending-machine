@@ -10,6 +10,12 @@
     <main class="mx-auto max-w-5xl px-6 py-10">
         <h1 class="mb-6 text-3xl font-bold">Products</h1>
 
+        <?php if (is_string($successMessage ?? null)): ?>
+            <p class="mb-4 rounded bg-green-100 p-4 text-green-800" role="status">
+                <?= htmlspecialchars($successMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+            </p>
+        <?php endif; ?>
+
         <?php if ($products === []): ?>
             <p class="rounded bg-white p-6 shadow">No products are available.</p>
         <?php else: ?>
