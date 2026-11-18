@@ -1,0 +1,11 @@
+{
+    "name": "vending-machine/app",
+    "description": "Vending machine application",
+    "type": "project",
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "App\\\\": "app/"
+        }
+    }
+}
