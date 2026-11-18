@@ -85,6 +85,7 @@ final class ProductRepositoryTest extends TestCase
 
         $page = $this->repository->getAll(2, 1, 'name', 'DESC');
 
+        self::assertSame(3, $this->repository->countAll());
         self::assertSame(['Pepsi', 'Coke'], array_column($page, 'name'));
         self::assertSame(['Coke'], array_column($this->repository->getAll(0, -1, 'name', 'ASC'), 'name'));
     }

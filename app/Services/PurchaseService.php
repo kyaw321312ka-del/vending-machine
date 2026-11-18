@@ -74,7 +74,9 @@ final class PurchaseService
             $totalPrice = $this->fromMilliUnits($unitPriceMilli * $quantity);
             $remainingQuantity = $availableQuantity - $quantity;
 
-            $this->products->updateQuantity($productId, $remainingQuantity);
+            if (!$this->products->updateQuantity($productId, $remainingQuantity)) {
+                throw new DomainException('Unable to update product inventory.');
+            }
 
             $transactionId = $this->transactions->create(
                 $userId,

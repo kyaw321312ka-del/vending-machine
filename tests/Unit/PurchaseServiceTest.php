@@ -163,6 +163,28 @@ final class PurchaseServiceTest extends TestCase
         self::assertSame(0, $this->transactions->countAll());
     }
 
+    public function testUnchangedInventoryUpdateRollsBackPurchase(): void
+    {
+        $this->pdo->exec(
+            'CREATE TRIGGER skip_product_quantity_update
+            BEFORE UPDATE OF quantity_available ON products
+            BEGIN
+                SELECT RAISE(IGNORE);
+            END'
+        );
+
+        try {
+            $this->service->purchase($this->userId, $this->cokeId, 2);
+            self::fail('Expected the inventory update to be rejected.');
+        } catch (DomainException $exception) {
+            self::assertSame('Unable to update product inventory.', $exception->getMessage());
+        }
+
+        self::assertFalse($this->pdo->inTransaction());
+        self::assertSame(10, (int) $this->products->findById($this->cokeId)['quantity_available']);
+        self::assertSame(0, $this->transactions->countAll());
+    }
+
     public function testEntireStockCanBePurchased(): void
     {
         $result = $this->service->purchase($this->userId, $this->cokeId, 10);

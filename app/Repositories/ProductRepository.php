@@ -104,6 +104,11 @@ final class ProductRepository
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    public function countAll(): int
+    {
+        return (int) $this->pdo->query('SELECT COUNT(*) FROM products')->fetchColumn();
+    }
+
     public function update(int $id, string $name, string $price, int $quantityAvailable): bool
     {
         $statement = $this->pdo->prepare(
