@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Contracts\ProductRepositoryInterface;
+use App\Contracts\PurchaseServiceInterface;
+use App\Contracts\TransactionRepositoryInterface;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\RoleMiddleware;
-use App\Repositories\ProductRepository;
-use App\Repositories\TransactionRepository;
 use App\Routing\Route;
-use App\Services\PurchaseService;
 use App\Validation\ProductValidator;
 use DomainException;
 use InvalidArgumentException;
@@ -20,10 +20,10 @@ use Throwable;
 final class ProductsController
 {
     public function __construct(
-        private ProductRepository $products,
+        private ProductRepositoryInterface $products,
         private ProductValidator $validator,
-        private PurchaseService $purchaseService,
-        private TransactionRepository $transactions
+        private PurchaseServiceInterface $purchaseService,
+        private TransactionRepositoryInterface $transactions
     ) {
     }
 

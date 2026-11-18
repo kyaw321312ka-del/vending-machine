@@ -4,19 +4,20 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Repositories\ProductRepository;
-use App\Repositories\TransactionRepository;
+use App\Contracts\ProductRepositoryInterface;
+use App\Contracts\TransactionRepositoryInterface;
+use App\Contracts\PurchaseServiceInterface;
 use DomainException;
 use InvalidArgumentException;
 use PDO;
 use Throwable;
 
-final class PurchaseService
+final class PurchaseService implements PurchaseServiceInterface
 {
     public function __construct(
         private PDO $pdo,
-        private ProductRepository $products,
-        private TransactionRepository $transactions
+        private ProductRepositoryInterface $products,
+        private TransactionRepositoryInterface $transactions
     ) {
     }
 

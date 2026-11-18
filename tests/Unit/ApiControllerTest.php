@@ -22,6 +22,8 @@ use PHPUnit\Framework\TestCase;
 
 final class ApiControllerTest extends TestCase
 {
+    private const JWT_SECRET = 'test-secret-with-at-least-thirty-two-bytes';
+
     private PDO $pdo;
     private ProductRepository $products;
     private UserRepository $users;
@@ -76,7 +78,7 @@ final class ApiControllerTest extends TestCase
         $passwordHash = password_hash('correct-horse-battery', PASSWORD_DEFAULT);
         $this->adminId = $this->users->create('Admin', 'admin@example.com', $passwordHash, 'admin');
         $this->userId = $this->users->create('User', 'user@example.com', $passwordHash);
-        $this->jwt = new JwtService('test-secret-with-at-least-thirty-two-bytes');
+        $this->jwt = new JwtService(self::JWT_SECRET);
         $jsonRequest = new JsonRequest(fn (): string => $this->body);
         $auth = new AuthService($this->users);
         $validator = new ProductValidator();
@@ -140,6 +142,31 @@ final class ApiControllerTest extends TestCase
         self::assertSame(201, $adminStatus);
         self::assertSame('Water', $created['data']['name']);
         self::assertSame(8, $created['data']['quantity_available']);
+    }
+
+    public function testProtectedEndpointRejectsMissingInvalidAndExpiredTokens(): void
+    {
+        [, $missingStatus] = $this->dispatch('GET', '/api/transactions');
+        self::assertSame(401, $missingStatus);
+
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer invalid-token';
+        [, $invalidStatus] = $this->dispatch('GET', '/api/transactions');
+        self::assertSame(401, $invalidStatus);
+
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$this->signedToken([
+            'iss' => 'vending-machine',
+            'sub' => (string) $this->userId,
+            'role' => 'user',
+            'iat' => time() - 120,
+            'exp' => time() - 1,
+        ]);
+        [, $expiredStatus] = $this->dispatch('GET', '/api/transactions');
+        self::assertSame(401, $expiredStatus);
+
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$this->jwt->createToken($this->userId, 'user');
+        [$response, $validStatus] = $this->dispatch('GET', '/api/transactions');
+        self::assertSame(200, $validStatus);
+        self::assertTrue($response['success']);
     }
 
     public function testPurchaseAndHistoryUseTheAuthenticatedUsersTransactions(): void
@@ -238,5 +265,23 @@ final class ApiControllerTest extends TestCase
         $body = ob_get_clean();
 
         return [json_decode($body, true, 512, JSON_THROW_ON_ERROR), http_response_code()];
+    }
+
+    private function signedToken(array $claims): string
+    {
+        $header = $this->base64UrlEncode(json_encode([
+            'typ' => 'JWT',
+            'alg' => 'HS256',
+        ], JSON_THROW_ON_ERROR));
+        $payload = $this->base64UrlEncode(json_encode($claims, JSON_THROW_ON_ERROR));
+        $unsignedToken = $header.'.'.$payload;
+        $signature = hash_hmac('sha256', $unsignedToken, self::JWT_SECRET, true);
+
+        return $unsignedToken.'.'.$this->base64UrlEncode($signature);
+    }
+
+    private function base64UrlEncode(string $value): string
+    {
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
     }
 }

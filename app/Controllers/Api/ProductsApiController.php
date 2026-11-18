@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Controllers\Api;
 
+use App\Contracts\ProductRepositoryInterface;
+use App\Contracts\PurchaseServiceInterface;
+use App\Contracts\TransactionRepositoryInterface;
 use App\Http\JsonInputException;
 use App\Http\JsonRequest;
 use App\Middleware\JwtAuthMiddleware;
 use App\Middleware\JwtRoleMiddleware;
-use App\Repositories\ProductRepository;
-use App\Repositories\TransactionRepository;
 use App\Routing\Route;
-use App\Services\PurchaseService;
 use App\Validation\ProductValidator;
 use DomainException;
 use InvalidArgumentException;
@@ -22,10 +22,10 @@ final class ProductsApiController
     private JsonRequest $jsonRequest;
 
     public function __construct(
-        private ProductRepository $products,
+        private ProductRepositoryInterface $products,
         private ProductValidator $validator,
-        private PurchaseService $purchases,
-        private TransactionRepository $transactions,
+        private PurchaseServiceInterface $purchases,
+        private TransactionRepositoryInterface $transactions,
         ?JsonRequest $jsonRequest = null
     ) {
         $this->jsonRequest = $jsonRequest ?? new JsonRequest();
