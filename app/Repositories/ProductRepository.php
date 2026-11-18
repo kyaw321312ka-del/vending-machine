@@ -51,12 +51,14 @@ final class ProductRepository
             throw new LogicException('A database transaction is required to lock a product.');
         }
 
-        $statement = $this->pdo->prepare(
-            'SELECT id, name, price, quantity_available
+        $sql = 'SELECT id, name, price, quantity_available
             FROM products
-            WHERE id = :id
-            FOR UPDATE'
-        );
+            WHERE id = :id';
+        if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'sqlite') {
+            $sql .= ' FOR UPDATE';
+        }
+
+        $statement = $this->pdo->prepare($sql);
         $statement->execute(['id' => $id]);
         $product = $statement->fetch(PDO::FETCH_ASSOC);
 
