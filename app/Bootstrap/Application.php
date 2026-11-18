@@ -5,15 +5,20 @@ declare(strict_types=1);
 namespace App\Bootstrap;
 
 use App\Controllers\AuthController;
+use App\Controllers\Api\AuthApiController;
+use App\Controllers\Api\ProductsApiController;
 use App\Controllers\ProductsController;
 use App\Database\Database;
 use App\Middleware\AuthMiddleware;
+use App\Middleware\JwtAuthMiddleware;
+use App\Middleware\JwtRoleMiddleware;
 use App\Middleware\RoleMiddleware;
 use App\Repositories\ProductRepository;
 use App\Repositories\TransactionRepository;
 use App\Repositories\UserRepository;
 use App\Routing\Router;
 use App\Services\AuthService;
+use App\Services\JwtService;
 use App\Services\PurchaseService;
 use App\Validation\ProductValidator;
 use RuntimeException;
@@ -32,9 +37,12 @@ final class Application
         $authService = new AuthService($userRepository);
         $productValidator = new ProductValidator();
         $purchaseService = new PurchaseService($pdo, $productRepository, $transactionRepository);
+        $jwtConfig = require $rootPath . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'jwt.php';
+        $jwtService = new JwtService($jwtConfig['secret'], $jwtConfig['issuer']);
 
         $controllerResolver = static function (string $controllerClass) use (
             $authService,
+            $jwtService,
             $productRepository,
             $productValidator,
             $purchaseService,
@@ -42,7 +50,14 @@ final class Application
         ): object {
             return match ($controllerClass) {
                 AuthController::class => new AuthController($authService),
+                AuthApiController::class => new AuthApiController($authService, $jwtService),
                 ProductsController::class => new ProductsController(
+                    $productRepository,
+                    $productValidator,
+                    $purchaseService,
+                    $transactionRepository
+                ),
+                ProductsApiController::class => new ProductsApiController(
                     $productRepository,
                     $productValidator,
                     $purchaseService,
@@ -54,10 +69,12 @@ final class Application
             };
         };
 
-        $middlewareResolver = static function (string $middlewareClass): object {
+        $middlewareResolver = static function (string $middlewareClass) use ($jwtService): object {
             return match ($middlewareClass) {
                 AuthMiddleware::class => new AuthMiddleware(),
                 RoleMiddleware::class => new RoleMiddleware(),
+                JwtAuthMiddleware::class => new JwtAuthMiddleware($jwtService),
+                JwtRoleMiddleware::class => new JwtRoleMiddleware(),
                 default => throw new RuntimeException(
                     "Middleware resolver is not configured for {$middlewareClass}."
                 ),
