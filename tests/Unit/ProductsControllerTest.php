@@ -67,7 +67,8 @@ final class ProductsControllerTest extends TestCase
 
         self::assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
         self::assertStringNotContainsString('<script>alert(1)</script>', $html);
-        self::assertStringContainsString('Page 1 of 2 (2 products)', $html);
+        self::assertStringContainsString('Current Page', $html);
+        self::assertStringContainsString('2 total products', $html);
         self::assertStringContainsString('/vending-machine/public/assets/css/output.css', $html);
     }
 

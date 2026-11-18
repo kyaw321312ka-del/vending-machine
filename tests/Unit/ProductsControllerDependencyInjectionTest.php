@@ -73,7 +73,9 @@ final class ProductsControllerDependencyInjectionTest extends TestCase
         $html = ob_get_clean();
 
         self::assertSame(200, http_response_code());
-        self::assertStringContainsString('Page 1 of 1 (0 products)', $html);
+        self::assertStringContainsString('Total Products', $html);
+        self::assertStringContainsString('Current Page', $html);
+        self::assertStringContainsString('0 products on this page', $html);
     }
 
     public function testProductDetailsUsesMockedProductAndRendersEscapedDetails(): void
