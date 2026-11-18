@@ -1,11 +1,19 @@
 {
-    "name": "vending-machine/app",
-    "description": "Vending machine application",
+    "name": "kyawzayarmin/vending-machine",
+    "description": "Vending Machine Management System",
     "type": "project",
-    "require": {},
+    "license": "MIT",
     "autoload": {
         "psr-4": {
-            "App\\\\": "app/"
+            "App\\": "app/"
         }
-    }
+    },
+    "authors": [
+        {
+            "name": "Kyaw Zayar Min",
+            "email": "kokyaw3482@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {}
 }
