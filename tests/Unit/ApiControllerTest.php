@@ -56,6 +56,7 @@ final class ApiControllerTest extends TestCase
                 name TEXT NOT NULL,
                 price TEXT NOT NULL,
                 quantity_available INTEGER NOT NULL DEFAULT 0,
+                is_enabled INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )'
@@ -142,6 +143,7 @@ final class ApiControllerTest extends TestCase
         self::assertSame(201, $adminStatus);
         self::assertSame('Water', $created['data']['name']);
         self::assertSame(8, $created['data']['quantity_available']);
+        self::assertFalse($created['data']['is_enabled']);
     }
 
     public function testProtectedEndpointRejectsMissingInvalidAndExpiredTokens(): void
@@ -197,7 +199,7 @@ final class ApiControllerTest extends TestCase
 
     public function testOnlyUsersCanPurchaseAndAdminsCanViewAllTransactions(): void
     {
-        $productId = $this->products->create('Cola', '2.500', 5);
+        $productId = $this->products->create('Cola', '2.500', 5, true);
         $this->body = json_encode(['quantity' => 1], JSON_THROW_ON_ERROR);
         $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$this->jwt->createToken($this->adminId, 'admin');
 
@@ -255,8 +257,8 @@ final class ApiControllerTest extends TestCase
 
     public function testProductListingSupportsPaginationAndSafeSorting(): void
     {
-        $this->products->create('Water', '1.000', 1);
-        $this->products->create('Soda', '2.000', 2);
+        $this->products->create('Water', '1.000', 1, true);
+        $this->products->create('Soda', '2.000', 2, true);
         $_GET = ['sort_by' => 'name', 'sort_direction' => 'DESC', 'per_page' => '1'];
 
         [$response, $status] = $this->dispatch('GET', '/api/products');
@@ -269,6 +271,62 @@ final class ApiControllerTest extends TestCase
         $_GET['sort_by'] = 'password';
         [, $invalidSortStatus] = $this->dispatch('GET', '/api/products');
         self::assertSame(422, $invalidSortStatus);
+    }
+
+    public function testPublicProductEndpointsOnlyExposeEnabledProductsWithStock(): void
+    {
+        $disabled = $this->products->create('Disabled', '1.000', 5);
+        $outOfStock = $this->products->create('Empty', '1.000', 0, true);
+        $available = $this->products->create('Available', '1.000', 5, true);
+
+        [$listing, $listingStatus] = $this->dispatch('GET', '/api/products');
+        self::assertSame(200, $listingStatus);
+        self::assertSame([$available], array_column($listing['data'], 'id'));
+        self::assertSame(1, $listing['pagination']['total']);
+
+        [, $disabledStatus] = $this->dispatch('GET', '/api/products/'.$disabled);
+        self::assertSame(404, $disabledStatus);
+        [, $emptyStatus] = $this->dispatch('GET', '/api/products/'.$outOfStock);
+        self::assertSame(404, $emptyStatus);
+        [$availableResponse, $availableStatus] = $this->dispatch('GET', '/api/products/'.$available);
+        self::assertSame(200, $availableStatus);
+        self::assertSame('Available', $availableResponse['data']['name']);
+    }
+
+    public function testDisabledProductCannotBePurchasedThroughApi(): void
+    {
+        $disabled = $this->products->create('Disabled', '1.000', 5);
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$this->jwt->createToken($this->userId, 'user');
+        $this->body = json_encode(['quantity' => 1], JSON_THROW_ON_ERROR);
+
+        [$response, $status] = $this->dispatch(
+            'POST',
+            '/api/products/'.$disabled.'/purchase'
+        );
+
+        self::assertSame(409, $status);
+        self::assertSame('Product is not available for purchase.', $response['message']);
+        self::assertSame(5, (int) $this->products->findById($disabled)['quantity_available']);
+        self::assertSame(0, $this->transactions->countAll());
+    }
+
+    public function testAdminCanEnableProductThroughApiUpdate(): void
+    {
+        $productId = $this->products->create('Water', '1.000', 5);
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$this->jwt->createToken($this->adminId, 'admin');
+        $this->body = json_encode([
+            'name' => 'Water',
+            'price' => '1.000',
+            'quantity_available' => 5,
+            'is_enabled' => true,
+        ], JSON_THROW_ON_ERROR);
+
+        [$updated, $status] = $this->dispatch('PUT', '/api/products/'.$productId);
+        self::assertSame(200, $status);
+        self::assertTrue($updated['data']['is_enabled']);
+
+        [$listing] = $this->dispatch('GET', '/api/products');
+        self::assertSame([$productId], array_column($listing['data'], 'id'));
     }
 
     public function testInvalidProductInputAndReferencedProductDeletionAreReported(): void

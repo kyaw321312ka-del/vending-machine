@@ -57,6 +57,13 @@ final class ProductValidator
             }
         }
 
+        if (
+            array_key_exists('is_enabled', $data)
+            && !in_array($data['is_enabled'], [true, false, 0, 1, '0', '1'], true)
+        ) {
+            $errors['is_enabled'] = 'Availability must be enabled or disabled.';
+        }
+
         return $errors;
     }
 

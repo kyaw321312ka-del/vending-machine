@@ -64,6 +64,21 @@ final class ProductValidatorTest extends TestCase
         }
     }
 
+    public function testAvailabilityAcceptsExplicitEnabledAndDisabledValues(): void
+    {
+        foreach ([true, false, 1, 0, '1', '0'] as $enabled) {
+            self::assertArrayNotHasKey(
+                'is_enabled',
+                $this->validator->validate($this->validData(['is_enabled' => $enabled]))
+            );
+        }
+
+        self::assertArrayHasKey(
+            'is_enabled',
+            $this->validator->validate($this->validData(['is_enabled' => 'yes']))
+        );
+    }
+
     private function validData(array $overrides = []): array
     {
         return array_replace([

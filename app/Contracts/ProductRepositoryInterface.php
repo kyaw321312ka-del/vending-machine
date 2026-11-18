@@ -6,7 +6,12 @@ namespace App\Contracts;
 
 interface ProductRepositoryInterface
 {
-    public function create(string $name, string $price, int $quantityAvailable = 0): int;
+    public function create(
+        string $name,
+        string $price,
+        int $quantityAvailable = 0,
+        bool $isEnabled = false
+    ): int;
 
     public function findById(int $id): ?array;
 
@@ -19,9 +24,24 @@ interface ProductRepositoryInterface
         string $sortDirection = 'ASC'
     ): array;
 
+    public function getAvailable(
+        int $limit = 10,
+        int $offset = 0,
+        string $sortBy = 'id',
+        string $sortDirection = 'ASC'
+    ): array;
+
     public function countAll(): int;
 
-    public function update(int $id, string $name, string $price, int $quantityAvailable): bool;
+    public function countAvailable(): int;
+
+    public function update(
+        int $id,
+        string $name,
+        string $price,
+        int $quantityAvailable,
+        bool $isEnabled = false
+    ): bool;
 
     public function updateQuantity(int $id, int $quantityAvailable): bool;
 

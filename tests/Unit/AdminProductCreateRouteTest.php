@@ -51,6 +51,7 @@ final class AdminProductCreateRouteTest extends TestCase
                 name TEXT NOT NULL,
                 price TEXT NOT NULL,
                 quantity_available INTEGER NOT NULL DEFAULT 0,
+                is_enabled INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )'
@@ -198,6 +199,7 @@ final class AdminProductCreateRouteTest extends TestCase
             'name' => 'Coke Zero',
             'price' => '4.125',
             'quantity_available' => '40',
+            'is_enabled' => '1',
         ];
 
         $this->dispatchWithOutput('POST', '/admin/products/'.$id.'/update');
@@ -208,6 +210,7 @@ final class AdminProductCreateRouteTest extends TestCase
         self::assertSame('Coke Zero', $product['name']);
         self::assertSame('4.125', $product['price']);
         self::assertSame(40, (int) $product['quantity_available']);
+        self::assertSame(1, (int) $product['is_enabled']);
         self::assertNull($this->products->findById(999));
     }
 
@@ -380,6 +383,7 @@ final class AdminProductCreateRouteTest extends TestCase
             'name' => '  Pepsi  ',
             'price' => '6.885',
             'quantity_available' => '50',
+            'is_enabled' => '1',
         ];
 
         $this->dispatchWithOutput();
@@ -389,6 +393,7 @@ final class AdminProductCreateRouteTest extends TestCase
         self::assertSame('Pepsi', $this->products->getAll()[0]['name']);
         self::assertSame('6.885', $this->products->getAll()[0]['price']);
         self::assertSame(50, (int) $this->products->getAll()[0]['quantity_available']);
+        self::assertSame(1, (int) $this->products->getAll()[0]['is_enabled']);
     }
 
     public function testInvalidProductIsRedisplayedWithOldValuesAndErrors(): void

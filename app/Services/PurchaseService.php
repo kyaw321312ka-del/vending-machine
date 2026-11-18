@@ -56,6 +56,10 @@ final class PurchaseService implements PurchaseServiceInterface
                 throw new DomainException('Product not found.');
             }
 
+            if ((int) ($product['is_enabled'] ?? 0) !== 1) {
+                throw new DomainException('Product is not available for purchase.');
+            }
+
             $availableQuantity = (int) $product['quantity_available'];
             if ($availableQuantity < $quantity) {
                 throw new DomainException('Insufficient product inventory.');

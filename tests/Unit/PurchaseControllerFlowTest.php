@@ -61,6 +61,7 @@ final class PurchaseControllerFlowTest extends TestCase
                 name TEXT NOT NULL,
                 price TEXT NOT NULL,
                 quantity_available INTEGER NOT NULL DEFAULT 0,
+                is_enabled INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )'
@@ -82,7 +83,7 @@ final class PurchaseControllerFlowTest extends TestCase
         $this->adminId = $this->createUser('Administrator', 'admin@example.com', 'admin');
         $this->products = new ProductRepository($this->pdo);
         $this->transactions = new TransactionRepository($this->pdo);
-        $this->productId = $this->products->create('<Coke>', '6.885', 5);
+        $this->productId = $this->products->create('<Coke>', '6.885', 5, true);
         $purchaseService = new PurchaseService($this->pdo, $this->products, $this->transactions);
         $controller = new ProductsController(
             $this->products,
@@ -132,9 +133,30 @@ final class PurchaseControllerFlowTest extends TestCase
         self::assertStringContainsString('Products', $html);
     }
 
+    public function testCustomersCannotSeeDisabledOrOutOfStockProducts(): void
+    {
+        $disabled = $this->products->create('Disabled', '1.000', 5);
+        $empty = $this->products->create('Empty', '1.000', 0, true);
+
+        $listing = $this->dispatchWithOutput('GET', '/products');
+        self::assertStringContainsString('&lt;Coke&gt;', $listing);
+        self::assertStringNotContainsString('Disabled', $listing);
+        self::assertStringNotContainsString('Empty', $listing);
+
+        $disabledDetails = $this->dispatchWithOutput('GET', '/products/'.$disabled);
+        self::assertSame(404, http_response_code());
+        self::assertSame('Product not found.', $disabledDetails);
+
+        $emptyDetails = $this->dispatchWithOutput('GET', '/products/'.$empty);
+        self::assertSame(404, http_response_code());
+        self::assertSame('Product not found.', $emptyDetails);
+    }
+
     public function testAdminProductListingOffersCreateEditAndCsrfProtectedDelete(): void
     {
         $this->authenticate($this->adminId, 'admin');
+        $this->products->create('Disabled', '1.000', 5);
+        $this->products->create('Empty', '1.000', 0, true);
         $token = str_repeat('a', 64);
         $_SESSION['_csrf_token'] = $token;
 
@@ -147,6 +169,8 @@ final class PurchaseControllerFlowTest extends TestCase
             'action="/vending-machine/public/admin/products/'.$this->productId.'/delete"',
             $html
         );
+        self::assertStringContainsString('Disabled', $html);
+        self::assertStringContainsString('Empty', $html);
         self::assertStringContainsString('name="_csrf_token" value="'.$token.'"', $html);
     }
 

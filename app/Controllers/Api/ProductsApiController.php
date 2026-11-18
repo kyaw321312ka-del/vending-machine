@@ -59,14 +59,14 @@ final class ProductsApiController
         try {
             $items = array_map(
                 $this->normalizeProduct(...),
-                $this->products->getAll(
+                $this->products->getAvailable(
                     $pagination['per_page'],
                     $pagination['offset'],
                     $sortBy,
                     strtoupper($sortDirection)
                 )
             );
-            $total = $this->products->countAll();
+            $total = $this->products->countAvailable();
         } catch (PDOException $exception) {
             $this->databaseError($exception);
 
@@ -97,7 +97,11 @@ final class ProductsApiController
 
             return;
         }
-        if ($product === null) {
+        if (
+            $product === null
+            || (int) ($product['is_enabled'] ?? 0) !== 1
+            || (int) ($product['quantity_available'] ?? 0) <= 0
+        ) {
             $this->notFound('Product not found.');
 
             return;
@@ -147,7 +151,8 @@ final class ProductsApiController
             $id = $this->products->create(
                 trim($input['name']),
                 trim((string) $input['price']),
-                $quantity
+                $quantity,
+                $this->isEnabled($input['is_enabled'] ?? false)
             );
             $product = $this->products->findById($id);
         } catch (PDOException $exception) {
@@ -221,7 +226,8 @@ final class ProductsApiController
                 $productId,
                 trim($input['name']),
                 trim((string) $input['price']),
-                $quantity
+                $quantity,
+                $this->isEnabled($input['is_enabled'] ?? $existing['is_enabled'])
             );
         } catch (PDOException $exception) {
             $this->databaseError($exception);
@@ -351,6 +357,15 @@ final class ProductsApiController
             }
 
             if ($exception->getMessage() === 'Insufficient product inventory.') {
+                $this->respond(409, [
+                    'success' => false,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                return;
+            }
+
+            if ($exception->getMessage() === 'Product is not available for purchase.') {
                 $this->respond(409, [
                     'success' => false,
                     'message' => $exception->getMessage(),
@@ -526,9 +541,15 @@ final class ProductsApiController
             'name' => (string) $product['name'],
             'price' => (string) $product['price'],
             'quantity_available' => (int) $product['quantity_available'],
+            'is_enabled' => (bool) $product['is_enabled'],
             'created_at' => $product['created_at'] ?? null,
             'updated_at' => $product['updated_at'] ?? null,
         ];
+    }
+
+    private function isEnabled(mixed $value): bool
+    {
+        return $value === true || $value === 1 || $value === '1';
     }
 
     private function isForeignKeyViolation(PDOException $exception): bool

@@ -137,7 +137,11 @@ ob_start();
                     $productName = (string) $product['name'];
                     $stock = (int) $product['quantity_available'];
                     $price = (string) $product['price'];
-                    $inStock = $stock > 0;
+                    $isEnabled = (int) ($product['is_enabled'] ?? 0) === 1;
+                    $customerAvailable = $isEnabled && $stock > 0;
+                    $availabilityLabel = !$isEnabled
+                        ? 'Disabled'
+                        : ($stock > 0 ? 'Enabled · In Stock' : 'Enabled · Out of Stock');
                     ?>
                     <article class="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-200 hover:shadow-lg">
                         <div class="relative flex h-44 items-center justify-center overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-slate-100">
@@ -145,8 +149,8 @@ ob_start();
                             <div class="absolute -bottom-12 -left-8 h-36 w-36 rounded-full bg-blue-100/50"></div>
                             <div class="relative flex h-24 w-24 items-center justify-center rounded-3xl border border-white/70 bg-white/70 text-5xl shadow-sm backdrop-blur transition duration-200 group-hover:scale-110"
                                  aria-hidden="true">🥤</div>
-                            <span class="absolute right-4 top-4 rounded-full px-3 py-1 text-xs font-bold <?= $inStock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' ?>">
-                                <?= $inStock ? 'In Stock' : 'Out of Stock' ?>
+                            <span class="absolute right-4 top-4 rounded-full px-3 py-1 text-xs font-bold <?= $customerAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' ?>">
+                                <?= $escape($availabilityLabel) ?>
                             </span>
                         </div>
 
@@ -162,7 +166,7 @@ ob_start();
                                 </div>
                                 <div class="text-right">
                                     <p class="text-xs font-medium text-slate-500">Available</p>
-                                    <p class="mt-1 text-lg font-bold <?= $inStock ? 'text-slate-800' : 'text-red-600' ?>">
+                                    <p class="mt-1 text-lg font-bold <?= $stock > 0 ? 'text-slate-800' : 'text-red-600' ?>">
                                         <?= $stock ?> units
                                     </p>
                                 </div>

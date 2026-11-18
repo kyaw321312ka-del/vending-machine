@@ -43,6 +43,7 @@ final class PurchaseServiceTest extends TestCase
                 name TEXT NOT NULL,
                 price TEXT NOT NULL,
                 quantity_available INTEGER NOT NULL DEFAULT 0,
+                is_enabled INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )'
@@ -71,8 +72,8 @@ final class PurchaseServiceTest extends TestCase
 
         $this->products = new ProductRepository($this->pdo);
         $this->transactions = new TransactionRepository($this->pdo);
-        $this->cokeId = $this->products->create('Coke', '3.990', 10);
-        $this->pepsiId = $this->products->create('Pepsi', '6.885', 50);
+        $this->cokeId = $this->products->create('Coke', '3.990', 10, true);
+        $this->pepsiId = $this->products->create('Pepsi', '6.885', 50, true);
         $this->service = new PurchaseService($this->pdo, $this->products, $this->transactions);
     }
 
@@ -120,6 +121,24 @@ final class PurchaseServiceTest extends TestCase
         }
 
         self::assertSame(10, (int) $this->products->findById($this->cokeId)['quantity_available']);
+        self::assertSame(0, $this->transactions->countAll());
+    }
+
+    public function testDisabledProductCannotBePurchased(): void
+    {
+        $disabledProductId = $this->products->create('Disabled', '1.000', 5);
+
+        try {
+            $this->service->purchase($this->userId, $disabledProductId, 1);
+            self::fail('Expected a disabled product to be rejected.');
+        } catch (DomainException $exception) {
+            self::assertSame('Product is not available for purchase.', $exception->getMessage());
+        }
+
+        self::assertSame(
+            5,
+            (int) $this->products->findById($disabledProductId)['quantity_available']
+        );
         self::assertSame(0, $this->transactions->countAll());
     }
 

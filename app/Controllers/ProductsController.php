@@ -96,11 +96,12 @@ final class ProductsController
         }
 
         $old = [];
-        foreach (['name', 'price', 'quantity_available'] as $field) {
+        foreach (['name', 'price', 'quantity_available', 'is_enabled'] as $field) {
             if (isset($_POST[$field]) && is_string($_POST[$field])) {
                 $old[$field] = $_POST[$field];
             }
         }
+        $old['is_enabled'] = $old['is_enabled'] ?? '0';
 
         $errors = $this->validator->validate($old);
         if ($errors !== []) {
@@ -118,7 +119,8 @@ final class ProductsController
             $this->products->create(
                 trim($old['name']),
                 trim($old['price']),
-                $quantity
+                $quantity,
+                $old['is_enabled'] === '1'
             );
 
             $_SESSION['_flash_success'] = 'Product created successfully.';
@@ -173,11 +175,12 @@ final class ProductsController
         }
 
         $old = [];
-        foreach (['name', 'price', 'quantity_available'] as $field) {
+        foreach (['name', 'price', 'quantity_available', 'is_enabled'] as $field) {
             if (isset($_POST[$field]) && is_string($_POST[$field])) {
                 $old[$field] = $_POST[$field];
             }
         }
+        $old['is_enabled'] = $old['is_enabled'] ?? '0';
 
         $errors = $this->validator->validate($old);
         if ($errors !== []) {
@@ -196,7 +199,8 @@ final class ProductsController
                 $productId,
                 trim($old['name']),
                 trim($old['price']),
-                $quantity
+                $quantity,
+                $old['is_enabled'] === '1'
             )) {
                 $this->notFound();
 
@@ -291,17 +295,30 @@ final class ProductsController
         }
 
         $perPage = min($perPage, 100);
-        $totalProducts = $this->products->countAll();
+        $currentUser = session_status() === PHP_SESSION_ACTIVE
+            ? ($_SESSION['user'] ?? null)
+            : null;
+        $isAdmin = is_array($currentUser) && ($currentUser['role'] ?? null) === 'admin';
+        $totalProducts = $isAdmin
+            ? $this->products->countAll()
+            : $this->products->countAvailable();
         $totalPages = max(1, (int) ceil($totalProducts / $perPage));
         $page = min($page, $totalPages);
 
         try {
-            $products = $this->products->getAll(
-                $perPage,
-                ($page - 1) * $perPage,
-                $sortBy,
-                $sortDirection
-            );
+            $products = $isAdmin
+                ? $this->products->getAll(
+                    $perPage,
+                    ($page - 1) * $perPage,
+                    $sortBy,
+                    $sortDirection
+                )
+                : $this->products->getAvailable(
+                    $perPage,
+                    ($page - 1) * $perPage,
+                    $sortBy,
+                    $sortDirection
+                );
         } catch (InvalidArgumentException) {
             $this->badRequest();
 
@@ -310,9 +327,6 @@ final class ProductsController
 
         $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
         $basePath = $this->basePath();
-        $currentUser = session_status() === PHP_SESSION_ACTIVE
-            ? ($_SESSION['user'] ?? null)
-            : null;
         $csrfToken = is_array($currentUser) ? $this->csrfToken() : '';
         $assetUrl = ($basePath === '')
             ? '/assets/css/output.css'
@@ -335,16 +349,27 @@ final class ProductsController
             return;
         }
 
+        $currentUser = session_status() === PHP_SESSION_ACTIVE
+            ? ($_SESSION['user'] ?? null)
+            : null;
+        if (!is_array($currentUser)) {
+            $currentUser = null;
+        }
+        $isAdmin = ($currentUser['role'] ?? null) === 'admin';
+
         $product = $this->products->findById($productId);
-        if ($product === null) {
+        if (
+            $product === null
+            || (!$isAdmin && (
+                (int) ($product['is_enabled'] ?? 0) !== 1
+                || (int) ($product['quantity_available'] ?? 0) <= 0
+            ))
+        ) {
             $this->notFound();
 
             return;
         }
 
-        $currentUser = session_status() === PHP_SESSION_ACTIVE
-            ? ($_SESSION['user'] ?? null)
-            : null;
         if (
             !is_array($currentUser)
             || !isset($currentUser['id'])
@@ -433,8 +458,10 @@ final class ProductsController
         }
 
         $userId = $currentUser['id'];
+        $redirectToListing = false;
         try {
             $purchase = $this->purchaseService->purchase($userId, $productId, $quantity);
+            $redirectToListing = $purchase['remaining_quantity'] === 0;
             $_SESSION['_flash_success'] = sprintf(
                 'Purchase successful: %d × %s for %s.',
                 $purchase['quantity'],
@@ -442,16 +469,25 @@ final class ProductsController
                 $purchase['total_price']
             );
         } catch (DomainException $exception) {
-            $_SESSION['_flash_error'] = $exception->getMessage() === 'Insufficient product inventory.'
-                ? 'There is not enough stock to complete this purchase.'
-                : 'Unable to complete this purchase.';
+            $redirectToListing = in_array($exception->getMessage(), [
+                'Product is not available for purchase.',
+                'Insufficient product inventory.',
+            ], true);
+            $_SESSION['_flash_error'] = match ($exception->getMessage()) {
+                'Insufficient product inventory.' => 'There is not enough stock to complete this purchase.',
+                'Product is not available for purchase.' => 'This product is not currently available for purchase.',
+                default => 'Unable to complete this purchase.',
+            };
         } catch (Throwable $exception) {
             error_log($exception->getMessage());
             $_SESSION['_flash_error'] = 'Unable to complete this purchase. Please try again.';
         }
 
         http_response_code(303);
-        header('Location: '.$this->basePath().'/products/'.$productId, true, 303);
+        $redirectPath = $redirectToListing
+            ? $this->basePath().'/products'
+            : $this->basePath().'/products/'.$productId;
+        header('Location: '.$redirectPath, true, 303);
     }
 
     #[Route('GET', '/transactions', [[AuthMiddleware::class]])]

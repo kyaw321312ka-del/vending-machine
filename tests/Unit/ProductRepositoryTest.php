@@ -25,6 +25,7 @@ final class ProductRepositoryTest extends TestCase
                 name TEXT NOT NULL,
                 price TEXT NOT NULL,
                 quantity_available INTEGER NOT NULL DEFAULT 0,
+                is_enabled INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )'
@@ -38,6 +39,7 @@ final class ProductRepositoryTest extends TestCase
 
         self::assertSame(1, $id);
         self::assertSame('Pepsi', $this->repository->findById($id)['name']);
+        self::assertSame(0, (int) $this->repository->findById($id)['is_enabled']);
         self::assertCount(1, $this->repository->getAll());
         self::assertTrue($this->repository->update($id, 'Pepsi Max', '7.125', 40));
         self::assertSame('Pepsi Max', $this->repository->findById($id)['name']);
@@ -88,6 +90,21 @@ final class ProductRepositoryTest extends TestCase
         self::assertSame(3, $this->repository->countAll());
         self::assertSame(['Pepsi', 'Coke'], array_column($page, 'name'));
         self::assertSame(['Coke'], array_column($this->repository->getAll(0, -1, 'name', 'ASC'), 'name'));
+    }
+
+    public function testAvailableProductsRequireBothEnablementAndPositiveStock(): void
+    {
+        $disabled = $this->repository->create('Disabled', '1.000', 5);
+        $outOfStock = $this->repository->create('Empty', '1.000', 0, true);
+        $available = $this->repository->create('Available', '1.000', 5, true);
+
+        self::assertSame(1, $this->repository->countAvailable());
+        self::assertSame(
+            [$available],
+            array_column($this->repository->getAvailable(), 'id')
+        );
+        self::assertNotContains($disabled, array_column($this->repository->getAvailable(), 'id'));
+        self::assertNotContains($outOfStock, array_column($this->repository->getAvailable(), 'id'));
     }
 
     public function testGetAllRejectsUnapprovedSortValues(): void

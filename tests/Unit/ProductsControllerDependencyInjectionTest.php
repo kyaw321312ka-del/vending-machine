@@ -61,10 +61,10 @@ final class ProductsControllerDependencyInjectionTest extends TestCase
     public function testIndexUsesMockedContractsWithoutOpeningDatabaseConnection(): void
     {
         $this->products->expects(self::once())
-            ->method('countAll')
+            ->method('countAvailable')
             ->willReturn(0);
         $this->products->expects(self::once())
-            ->method('getAll')
+            ->method('getAvailable')
             ->with(10, 0, 'id', 'ASC')
             ->willReturn([]);
 
@@ -106,7 +106,7 @@ final class ProductsControllerDependencyInjectionTest extends TestCase
         ]);
         $this->products->expects(self::once())
             ->method('create')
-            ->with('Water', '1.250', 8)
+            ->with('Water', '1.250', 8, false)
             ->willReturn(51);
 
         $this->controller->store();
@@ -128,7 +128,7 @@ final class ProductsControllerDependencyInjectionTest extends TestCase
             ->willReturn($this->product('Water'));
         $this->products->expects(self::once())
             ->method('update')
-            ->with(42, 'Updated Water', '2.500', 3)
+            ->with(42, 'Updated Water', '2.500', 3, false)
             ->willReturn(true);
 
         $this->controller->update('42');
@@ -257,6 +257,7 @@ final class ProductsControllerDependencyInjectionTest extends TestCase
             'name' => $name,
             'price' => '1.250',
             'quantity_available' => 8,
+            'is_enabled' => 1,
             'created_at' => '2026-01-01 00:00:00',
             'updated_at' => '2026-01-01 00:00:00',
         ];

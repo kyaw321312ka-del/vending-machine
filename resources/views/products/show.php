@@ -13,8 +13,9 @@ $productId = (int) ($product['id'] ?? 0);
 $productName = (string) ($product['name'] ?? '');
 $productPrice = (string) ($product['price'] ?? '0.000');
 $productStock = (int) ($product['quantity_available'] ?? 0);
+$isEnabled = (int) ($product['is_enabled'] ?? 0) === 1;
 $purchaseUrl = $basePath . '/products/' . $productId . '/purchase';
-$inStock = $productStock > 0;
+$inStock = $isEnabled && $productStock > 0;
 
 $escape = static fn (string $value): string => htmlspecialchars(
     $value,
@@ -62,7 +63,7 @@ ob_start();
                     <div class="relative flex h-40 w-40 items-center justify-center rounded-[2rem] border border-white/70 bg-white/70 text-8xl shadow-xl backdrop-blur-sm sm:h-52 sm:w-52 sm:text-9xl"
                          aria-hidden="true">🥤</div>
                     <span class="absolute left-5 top-5 rounded-full px-4 py-2 text-xs font-bold <?= $inStock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' ?>">
-                        <?= $inStock ? 'Available' : 'Out of Stock' ?>
+                        <?= $inStock ? 'Available' : (!$isEnabled ? 'Disabled' : 'Out of Stock') ?>
                     </span>
                 </div>
 
@@ -84,7 +85,7 @@ ob_start();
                         <div class="rounded-xl bg-slate-50 p-4">
                             <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Stock status</p>
                             <p class="mt-2 font-bold <?= $inStock ? 'text-green-600' : 'text-red-600' ?>">
-                                <?= $inStock ? 'In Stock' : 'Unavailable' ?>
+                                <?= $inStock ? 'In Stock' : (!$isEnabled ? 'Disabled' : 'Out of Stock') ?>
                             </p>
                         </div>
                         <div class="rounded-xl bg-slate-50 p-4">
@@ -182,6 +183,10 @@ ob_start();
                         <p class="mt-2 text-sm leading-6 text-blue-800">
                             Administrators manage products and inventory. Please use a customer account to purchase products.
                         </p>
+                        <a href="<?= $escape($basePath . '/admin/products/' . $productId . '/edit') ?>"
+                           class="mt-5 flex w-full items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700">
+                            Edit Product Availability
+                        </a>
                     </div>
                     <a href="<?= $escape($historyUrl) ?>"
                        class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">

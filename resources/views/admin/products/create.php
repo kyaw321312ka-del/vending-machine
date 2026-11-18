@@ -88,6 +88,29 @@ ob_start();
                 <?php endif; ?>
             </div>
 
+            <div class="rounded border border-slate-200 bg-slate-50 p-4">
+                <input type="hidden" name="is_enabled" value="0">
+                <label for="is_enabled" class="flex items-start gap-3">
+                    <input
+                        id="is_enabled"
+                        name="is_enabled"
+                        type="checkbox"
+                        value="1"
+                        class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        <?= ($old['is_enabled'] ?? '0') === '1' ? 'checked' : '' ?>
+                    >
+                    <span>
+                        <span class="block font-medium">Enable for customers</span>
+                        <span class="mt-1 block text-sm text-slate-600">
+                            Customers can see this product only while it is enabled and has stock.
+                        </span>
+                    </span>
+                </label>
+                <?php if (isset($errors['is_enabled']) && is_string($errors['is_enabled'])): ?>
+                    <p class="mt-2 text-sm text-red-700"><?= $escape($errors['is_enabled']) ?></p>
+                <?php endif; ?>
+            </div>
+
             <div class="flex gap-3">
                 <button type="submit" class="rounded bg-blue-700 px-4 py-2 font-medium text-white">Create product</button>
                 <a href="<?= $escape($productsUrl) ?>" class="rounded border border-slate-300 px-4 py-2 font-medium">Cancel</a>
