@@ -37,4 +37,4 @@ Purchase bodies require a positive integer `quantity`. Product deletion returns 
 
 ## Web authentication
 
-The HTML sign-in and registration forms are available at `/auth/login` and `/auth/register`. The existing `/login` and `/register` endpoints remain JSON endpoints.
+The HTML sign-in and registration forms are available at `/auth/login` and `/auth/register`. The shared navigation includes a CSRF-protected sign-out button at `/auth/logout`. The existing `/login` and `/register` endpoints remain JSON endpoints.

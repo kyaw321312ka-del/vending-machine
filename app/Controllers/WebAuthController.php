@@ -122,6 +122,28 @@ final class WebAuthController
         }
     }
 
+    #[Route('POST', '/auth/logout')]
+    public function logout(): void
+    {
+        if (!$this->hasValidCsrfToken()) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Invalid CSRF token.';
+
+            return;
+        }
+
+        try {
+            $this->authService->logout();
+            $this->redirect('/auth/login');
+        } catch (RuntimeException $exception) {
+            error_log($exception->getMessage());
+            http_response_code(500);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Unable to sign out right now.';
+        }
+    }
+
     private function render(string $view, string $title, array $data, int $status): void
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {

@@ -309,6 +309,10 @@ final class ProductsController
 
         $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
         $basePath = $this->basePath();
+        $currentUser = session_status() === PHP_SESSION_ACTIVE
+            ? ($_SESSION['user'] ?? null)
+            : null;
+        $csrfToken = is_array($currentUser) ? $this->csrfToken() : '';
         $assetUrl = ($basePath === '')
             ? '/assets/css/output.css'
             : $basePath . '/assets/css/output.css';
@@ -456,6 +460,7 @@ final class ProductsController
             ($page - 1) * $perPage
         );
         $basePath = $this->basePath();
+        $csrfToken = $this->csrfToken();
         $successMessage = $this->takeFlash('_flash_success');
         $errorMessage = $this->takeFlash('_flash_error');
 

@@ -33,6 +33,10 @@ $escape = static fn (string $value): string => htmlspecialchars(
                         <a class="text-blue-700 underline" href="<?= $escape($basePath . '/admin/products/create') ?>">Create product</a>
                     <?php endif; ?>
                     <span class="text-sm text-slate-600"><?= $escape((string) ($currentUser['name'] ?? '')) ?></span>
+                    <form action="<?= $escape($basePath . '/auth/logout') ?>" method="post">
+                        <input type="hidden" name="_csrf_token" value="<?= $escape($csrfToken) ?>">
+                        <button type="submit" class="text-blue-700 underline">Log out</button>
+                    </form>
                 <?php else: ?>
                     <a class="text-blue-700 underline" href="<?= $escape($basePath . '/auth/login') ?>">Sign in</a>
                     <a class="text-blue-700 underline" href="<?= $escape($basePath . '/auth/register') ?>">Create account</a>

@@ -146,6 +146,51 @@ final class WebAuthControllerTest extends TestCase
         self::assertNull($this->users->findByEmail('ada@example.com'));
     }
 
+    public function testAuthenticatedNavigationShowsCsrfProtectedLogoutForm(): void
+    {
+        $_SESSION['user'] = [
+            'id' => 3,
+            'name' => 'Admin User',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+        $_SESSION['_csrf_token'] = str_repeat('d', 64);
+
+        ob_start();
+        $this->controller->showLogin();
+        $html = ob_get_clean();
+
+        self::assertStringContainsString('action="/vending-machine/public/auth/logout"', $html);
+        self::assertStringContainsString('name="_csrf_token" value="'.str_repeat('d', 64).'"', $html);
+        self::assertStringContainsString('>Log out</button>', $html);
+    }
+
+    public function testLogoutRequiresCsrfAndDestroysSession(): void
+    {
+        $_SESSION['user'] = [
+            'id' => 3,
+            'name' => 'Admin User',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ];
+        $_SESSION['_csrf_token'] = str_repeat('e', 64);
+        $_POST['_csrf_token'] = str_repeat('f', 64);
+
+        ob_start();
+        $this->controller->logout();
+        $invalidCsrfBody = ob_get_clean();
+
+        self::assertSame(403, http_response_code());
+        self::assertSame('Invalid CSRF token.', $invalidCsrfBody);
+        self::assertArrayHasKey('user', $_SESSION);
+
+        $_POST['_csrf_token'] = $_SESSION['_csrf_token'];
+        $this->controller->logout();
+
+        self::assertSame(303, http_response_code());
+        self::assertSame(PHP_SESSION_NONE, session_status());
+    }
+
     private function post(array $fields): void
     {
         $_SERVER['REQUEST_METHOD'] = 'POST';
