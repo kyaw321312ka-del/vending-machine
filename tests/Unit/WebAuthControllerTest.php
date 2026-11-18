@@ -67,6 +67,9 @@ final class WebAuthControllerTest extends TestCase
         self::assertStringContainsString('Vending Machine', $loginHtml);
         self::assertStringContainsString('name="_csrf_token"', $loginHtml);
         self::assertStringContainsString('/vending-machine/public/auth/register', $loginHtml);
+        self::assertStringContainsString('id="mobile-menu-button"', $loginHtml);
+        self::assertStringContainsString('aria-controls="mobile-navigation"', $loginHtml);
+        self::assertStringContainsString('id="mobile-navigation"', $loginHtml);
 
         ob_start();
         $this->controller->showRegister();
@@ -162,7 +165,7 @@ final class WebAuthControllerTest extends TestCase
 
         self::assertStringContainsString('action="/vending-machine/public/auth/logout"', $html);
         self::assertStringContainsString('name="_csrf_token" value="'.str_repeat('d', 64).'"', $html);
-        self::assertStringContainsString('>Log out</button>', $html);
+        self::assertStringContainsString('Log out', $html);
     }
 
     public function testLogoutRequiresCsrfAndDestroysSession(): void
