@@ -7,6 +7,7 @@ $currentUser = session_status() === PHP_SESSION_ACTIVE
 if (!is_array($currentUser)) {
     $currentUser = null;
 }
+$csrfToken = is_string($csrfToken ?? null) ? $csrfToken : '';
 
 $escape = static fn (string $value): string => htmlspecialchars(
     $value,
@@ -170,6 +171,23 @@ ob_start();
                                class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                                 View Product <span aria-hidden="true">&rarr;</span>
                             </a>
+                            <?php if (($currentUser['role'] ?? null) === 'admin'): ?>
+                                <div class="mt-3 grid grid-cols-2 gap-3">
+                                    <a href="<?= $escape($basePath . '/admin/products/' . $productId . '/edit') ?>"
+                                       class="flex items-center justify-center rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50">
+                                        Edit
+                                    </a>
+                                    <form action="<?= $escape($basePath . '/admin/products/' . $productId . '/delete') ?>"
+                                          method="post"
+                                          onsubmit="return confirm('Delete this product? Products with transaction history cannot be deleted.')">
+                                        <input type="hidden" name="_csrf_token" value="<?= $escape($csrfToken) ?>">
+                                        <button type="submit"
+                                                class="w-full rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50">
+                                            Delete
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </article>
                 <?php endforeach; ?>

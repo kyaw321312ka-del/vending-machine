@@ -132,6 +132,24 @@ final class PurchaseControllerFlowTest extends TestCase
         self::assertStringContainsString('Products', $html);
     }
 
+    public function testAdminProductListingOffersCreateEditAndCsrfProtectedDelete(): void
+    {
+        $this->authenticate($this->adminId, 'admin');
+        $token = str_repeat('a', 64);
+        $_SESSION['_csrf_token'] = $token;
+
+        $html = $this->dispatchWithOutput('GET', '/products');
+
+        self::assertSame(200, http_response_code());
+        self::assertStringContainsString('/admin/products/create', $html);
+        self::assertStringContainsString('/admin/products/'.$this->productId.'/edit', $html);
+        self::assertStringContainsString(
+            'action="/vending-machine/public/admin/products/'.$this->productId.'/delete"',
+            $html
+        );
+        self::assertStringContainsString('name="_csrf_token" value="'.$token.'"', $html);
+    }
+
     public function testAuthenticatedProductDetailsHavePurchaseFormAndSharedCsrfToken(): void
     {
         $this->authenticate($this->userId);
