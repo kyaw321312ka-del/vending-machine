@@ -275,6 +275,7 @@ final class ProductsController
         header('Location: '.$this->basePath().'/products', true, 303);
     }
 
+    #[Route('GET', '/')]
     #[Route('GET', '/products')]
     public function index(): void
     {

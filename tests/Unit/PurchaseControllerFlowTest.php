@@ -123,6 +123,15 @@ final class PurchaseControllerFlowTest extends TestCase
         self::assertStringNotContainsString('name="_csrf_token"', $html);
     }
 
+    public function testProductListingIsAvailableAtApplicationRoot(): void
+    {
+        $html = $this->dispatchWithOutput('GET', '/');
+
+        self::assertSame(200, http_response_code());
+        self::assertStringContainsString('&lt;Coke&gt;', $html);
+        self::assertStringContainsString('Products', $html);
+    }
+
     public function testAuthenticatedProductDetailsHavePurchaseFormAndSharedCsrfToken(): void
     {
         $this->authenticate($this->userId);
